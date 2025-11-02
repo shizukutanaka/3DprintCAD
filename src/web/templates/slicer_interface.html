@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}Slicer - 3D Print CAD Assistant{% endblock %}
+
+{% block page_title %}Slicer Interface{% endblock %}
+
+{% block extra_css %}
+<style>
+    .slicer-grid {
+        display: grid;
+        grid-template-columns: 350px 1fr 300px;
+        gap: var(--ds-space-200);
+        height: calc(100vh - 150px);
+    }
+    .slicer-column {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    .slicer-column .card-body {
+        flex-grow: 1;
+        overflow-y: auto;
+    }
+    #preview-container {
+        background: var(--ds-bg-neutral-subtle);
+        border-radius: var(--ds-border-radius);
+        height: 100%;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="slicer-grid">
+    <div class="slicer-column settings-column">
+        <div class="card card-custom h-100">
+            <div class="card-header"><h3 class="h6 mb-0">Slicer Settings</h3></div>
+            <div class="card-body p-0">
+                <div class="accordion accordion-flush" id="slicer-settings-accordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="h-layer">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#c-layer">Layer Settings</button>
+                        </h2>
+                        <div id="c-layer" class="accordion-collapse collapse show" data-bs-parent="#slicer-settings-accordion">
+                            <div class="accordion-body">
+                                <div class="form-group mb-3">
+                                    <label for="layer-height" class="form-label">Layer Height (mm)</label>
+                                    <input type="number" class="form-control" id="layer-height" value="0.2" step="0.05">
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="adaptive-layers">
+                                    <label class="form-check-label" for="adaptive-layers">Adaptive Layers</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="h-wall">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c-wall">Wall Settings</button>
+                        </h2>
+                        <div id="c-wall" class="accordion-collapse collapse" data-bs-parent="#slicer-settings-accordion">
+                            <div class="accordion-body">
+                                <div class="form-group mb-3">
+                                    <label for="wall-lines" class="form-label">Wall Line Count</label>
+                                    <input type="number" class="form-control" id="wall-lines" value="3">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                     <div class="accordion-item">
+                        <h2 class="accordion-header" id="h-infill">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c-infill">Infill Settings</button>
+                        </h2>
+                        <div id="c-infill" class="accordion-collapse collapse" data-bs-parent="#slicer-settings-accordion">
+                            <div class="accordion-body">
+                                <div class="form-group mb-3">
+                                    <label for="infill-density" class="form-label">Infill Density (%)</label>
+                                    <input type="range" class="form-range" id="infill-density" min="0" max="100" value="20">
+                                </div>
+                                <div class="form-group">
+                                    <label for="infill-pattern" class="form-label">Infill Pattern</label>
+                                    <select class="form-select" id="infill-pattern">
+                                        <option>Cubic</option>
+                                        <option>Grid</option>
+                                        <option>Gyroid</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="h-support">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c-support">Support Settings</button>
+                        </h2>
+                        <div id="c-support" class="accordion-collapse collapse" data-bs-parent="#slicer-settings-accordion">
+                            <div class="accordion-body">
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" id="generate-support">
+                                    <label class="form-check-label" for="generate-support">Generate Support</label>
+                                </div>
+                                <div class="form-group">
+                                    <label for="support-angle" class="form-label">Overhang Angle (°)</label>
+                                    <input type="range" class="form-range" id="support-angle" min="0" max="90" value="45">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="h-speed">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c-speed">Speed Settings</button>
+                        </h2>
+                        <div id="c-speed" class="accordion-collapse collapse" data-bs-parent="#slicer-settings-accordion">
+                            <div class="accordion-body">
+                                <div class="form-group mb-3">
+                                    <label for="print-speed" class="form-label">Print Speed (mm/s)</label>
+                                    <input type="number" class="form-control" id="print-speed" value="50">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                     <div class="accordion-item">
+                        <h2 class="accordion-header" id="h-advanced">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c-advanced">Advanced</button>
+                        </h2>
+                        <div id="c-advanced" class="accordion-collapse collapse" data-bs-parent="#slicer-settings-accordion">
+                            <div class="accordion-body">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="retraction">
+                                    <label class="form-check-label" for="retraction">Enable Retraction</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="slicer-column preview-column">
+        <div id="preview-container">
+             <!-- 3D preview canvas will be initialized here by JS -->
+        </div>
+    </div>
+    <div class="slicer-column stats-column">
+        <div class="card card-custom h-100">
+            <div class="card-header"><h3 class="h6 mb-0">Print Stats</h3></div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-8">Print Time</dt>
+                    <dd class="col-sm-4 text-end">-</dd>
+                    <dt class="col-sm-8">Material Usage</dt>
+                    <dd class="col-sm-4 text-end">-</dd>
+                    <dt class="col-sm-8">Layer Count</dt>
+                    <dd class="col-sm-4 text-end">-</dd>
+                </dl>
+                <hr class="my-3">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-primary-custom">Slice</button>
+                    <button class="btn btn-secondary-custom">Export G-code</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

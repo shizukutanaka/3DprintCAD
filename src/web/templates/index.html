@@ -1,0 +1,647 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - 3D Print CAD Assistant{% endblock %}
+
+{% block page_title %}Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dashboard-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: var(--ds-space-300);
+    }
+
+    @media (max-width: 992px) {
+        .dashboard-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .nav-tabs .nav-link {
+        border: none;
+        border-bottom: 2px solid transparent;
+        color: var(--ds-neutral-60);
+        font-weight: 500;
+    }
+
+    .nav-tabs .nav-link.active {
+        color: var(--ds-link);
+        border-bottom-color: var(--ds-link);
+        background: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-grid">
+    <div class="main-column">
+        <div class="card card-custom mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h2 class="h5 mb-0">Start a New Validation</h2>
+                <button class="btn btn-primary-custom" onclick="document.getElementById('fileInput').click()">
+                    <i class="bi bi-upload me-2"></i>Upload Model
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="upload-zone" id="uploadZone" data-drop-zone>
+                    <div class="text-center">
+                        <i class="bi bi-cloud-arrow-up" style="font-size: 3rem; color: var(--ds-neutral-40);"></i>
+                        <h3 class="h5 mt-3 mb-2">Drag & drop files here</h3>
+                        <p class="text-muted mb-0">or click the upload button</p>
+                        <input type="file" id="fileInput" accept=".stl,.obj,.ply,.3mf,.amf" multiple hidden>
+                        <p class="text-muted mt-3 mb-0">
+                            <small>Supported formats: STL, OBJ, PLY, 3MF, AMF (Max 100MB)</small>
+                        </p>
+                    </div>
+                </div>
+
+                <div id="fileList" class="mt-4"></div>
+                <div id="uploadProgressContainer" class="mt-3"></div>
+            </div>
+        </div>
+
+        <div class="card card-custom">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs" id="ai-tools-tabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="analysis-tab" data-bs-toggle="tab" data-bs-target="#analysis-panel" type="button" role="tab">Analysis</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="generator-tab" data-bs-toggle="tab" data-bs-target="#generator-panel" type="button" role="tab">Generator</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="assistant-tab" data-bs-toggle="tab" data-bs-target="#assistant-panel" type="button" role="tab">Assistant</button>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content" id="ai-tools-content">
+                    <div class="tab-pane fade show active" id="analysis-panel" role="tabpanel">
+                        <div id="analysisContainer">
+                             <h4 class="h6 mb-3">Structural Analysis</h4>
+                             <form id="structuralAnalysisForm" enctype="multipart/form-data">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="materialSelect" class="form-label">Material</label>
+                                            <select class="form-select" name="material" id="materialSelect">
+                                                <option value="steel">Steel</option>
+                                                <option value="aluminum">Aluminum</option>
+                                                <option value="pla">PLA</option>
+                                                <option value="abs">ABS</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="forceMagnitude" class="form-label">Force (N)</label>
+                                            <input type="number" class="form-control" id="forceMagnitude" name="force_magnitude" placeholder="e.g., 1000" value="1000">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <button type="button" class="btn btn-primary-custom w-100" onclick="runStructuralAnalysis()">Run Analysis</button>
+                                </div>
+                            </form>
+                            <div id="analysisResults" class="alert alert-info mt-2" style="display: none;"></div>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="generator-panel" role="tabpanel">
+                        <div id="aiGeneratorContainer">
+                            <div class="form-group">
+                                <label for="textPrompt" class="form-label">Text-to-3D Prompt</label>
+                                <div class="input-group">
+                                    <input type="text" id="textPrompt" class="form-control" placeholder="e.g., 'a cube of size 20mm'" maxlength="200">
+                                    <button class="btn btn-primary-custom" onclick="generateFromText()" id="generateBtn">Generate</button>
+                                </div>
+                                <div class="form-help">Try: "a cylinder with radius 5mm and height 30mm"</div>
+                            </div>
+                            <div id="generationStatus" class="alert alert-info mt-3" style="display: none;"></div>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="assistant-panel" role="tabpanel">
+                        <div id="aiChatContainer">
+                            <div class="form-group">
+                                <label for="chatQuery" class="form-label">AI Design Assistant</label>
+                                <div class="input-group">
+                                    <input type="text" id="chatQuery" class="form-control" placeholder="Ask about 3D design, printing, or troubleshooting..." maxlength="300">
+                                    <button class="btn btn-primary-custom" onclick="askAIAssistant()" id="chatBtn">Ask</button>
+                                </div>
+                            </div>
+                            <div id="chatResponse" class="card card-custom p-3 mt-3" style="display: none; max-height: 200px; overflow-y: auto;">
+                                <div id="chatAnswer"></div>
+                                <div id="chatSuggestions" class="mt-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="side-column">
+        <div class="card card-custom mb-4">
+            <div class="card-header">
+                <h3 class="h6 mb-0">Recent Validations</h3>
+            </div>
+            <div class="card-body">
+                <div id="recentValidations">
+                    <p class="text-muted">No recent validations</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card card-custom mb-4">
+            <div class="card-header">
+                <h3 class="h6 mb-0">Quick Actions</h3>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-secondary-custom w-100">Batch Process</button>
+                    <button class="btn btn-secondary-custom w-100">Validation Settings</button>
+                    <button class="btn btn-secondary-custom w-100">Export Results</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card card-custom">
+             <div class="card-header">
+                <h3 class="h6 mb-0">System Status</h3>
+            </div>
+            <div class="card-body">
+                 <div class="mb-2">
+                    <div class="d-flex justify-content-between mb-1">
+                        <small>API Status</small>
+                        <span class="lozenge lozenge-success">Online</span>
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between mb-1">
+                        <small>Processing Queue</small>
+                        <small>0 items</small>
+                    </div>
+                    <div class="progress-custom">
+                        <div class="progress-bar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal fade" id="settingsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Validation Settings</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Min Wall Thickness (mm)</label>
+                    <input type="number" class="form-control" id="minWallThickness" value="0.8" step="0.1">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Min Feature Size (mm)</label>
+                    <input type="number" class="form-control" id="minFeatureSize" value="0.4" step="0.1">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Max Overhang Angle (°)</label>
+                    <input type="number" class="form-control" id="maxOverhangAngle" value="60" step="5">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ g.csp_nonce if g.csp_nonce else '' }}">
+    const uploadZone = document.getElementById('uploadZone');
+    const fileInput = document.getElementById('fileInput');
+    const fileList = document.getElementById('fileList');
+    const progressContainer = document.getElementById('uploadProgressContainer');
+    let uploadedFiles = [];
+
+    // Drag and drop handlers
+    uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadZone.classList.add('dragover');
+    });
+
+    uploadZone.addEventListener('dragleave', () => {
+        uploadZone.classList.remove('dragover');
+    });
+
+    uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files);
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        handleFiles(e.target.files);
+    });
+
+    async function handleFiles(files) {
+        // Validate files before upload
+        const validation = window.clientValidator.validateFiles(Array.from(files));
+        if (!validation.valid) {
+            window.clientValidator.showErrors(validation.errors);
+            (window.enhancedUI?.showNotification)?.(validation.errors.join(', '), 'error', 6000);
+            return;
+        }
+
+        for (const file of files) {
+            await uploadFile(file);
+        }
+    }
+
+    async function uploadFile(file) {
+        // Additional single file validation
+        const fileValidation = window.clientValidator.validateFile(file);
+        if (!fileValidation.valid) {
+            window.clientValidator.showErrors(fileValidation.errors);
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const fileCard = createFileCard(file.name, 'uploading');
+        fileList.appendChild(fileCard);
+
+        const uploadId = (window.crypto?.randomUUID?.() || `upload-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+        const progressConfig = window.trackUpload ? window.trackUpload(uploadId, file.name, file.size, progressContainer) : {};
+
+        try {
+            const axiosConfig = {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            };
+
+            axiosConfig.onUploadProgress = (progressEvent) => {
+                if (progressConfig?.onUploadProgress) {
+                    progressConfig.onUploadProgress(progressEvent);
+                }
+
+                if (progressEvent.total) {
+                    const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                    updateFileProgress(fileCard, progress);
+                }
+            };
+
+            const response = await axios.post('/api/upload', formData, axiosConfig);
+
+            uploadedFiles.push(response.data);
+            updateFileCard(fileCard, 'uploaded', response.data.file_id);
+
+            // Auto-validate after upload
+            await validateFile(response.data.file_id, fileCard);
+
+            window.uploadProgressTracker?.completeUpload?.(uploadId);
+            (window.enhancedUI?.showNotification)?.(`${file.name} のアップロードが完了しました`, 'success', 4000);
+
+        } catch (error) {
+            updateFileCard(fileCard, 'error');
+            console.error('Upload error:', error);
+            window.uploadProgressTracker?.failUpload?.(uploadId, error?.message || 'Upload failed');
+            (window.enhancedUI?.showNotification)?.(`${file.name} のアップロードに失敗しました`, 'error', 6000);
+        }
+    }
+
+    async function validateFile(fileId, fileCard) {
+        updateFileCard(fileCard, 'validating');
+
+        const settings = {
+            min_wall_thickness: parseFloat(document.getElementById('minWallThickness')?.value || 0.8),
+            min_feature_size: parseFloat(document.getElementById('minFeatureSize')?.value || 0.4),
+            max_overhang_angle: parseFloat(document.getElementById('maxOverhangAngle')?.value || 60)
+        };
+
+        try {
+            const response = await axios.post(`/api/validate/${fileId}`, settings);
+            const validation = response.data.validation;
+
+            const status = validation.is_valid ? 'valid' : 'issues';
+            updateFileCard(fileCard, status, fileId, validation);
+
+            updateStats();
+
+            if (validation.is_valid) {
+                (window.enhancedUI?.showNotification)?.('メッシュ検証が成功しました', 'success', 4000);
+            } else {
+                (window.enhancedUI?.showNotification)?.('メッシュに問題が見つかりました', 'warning', 5000);
+            }
+
+        } catch (error) {
+            updateFileCard(fileCard, 'error');
+            console.error('Validation error:', error);
+            (window.enhancedUI?.showNotification)?.('検証中にエラーが発生しました', 'error', 6000);
+        }
+    }
+
+    function createFileCard(filename, status) {
+        const card = document.createElement('div');
+        card.className = 'card card-custom mb-2';
+        card.innerHTML = `
+            <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="bi bi-file-earmark-text me-2"></i>
+                        <span class="fw-medium">${filename}</span>
+                    </div>
+                    <div class="status-indicator">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="progress progress-custom mt-2" style="display: none;">
+                    <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                </div>
+                <div class="validation-results mt-2" style="display: none;"></div>
+            </div>
+        `;
+        return card;
+    }
+
+    function updateFileProgress(card, progress) {
+        const progressBar = card.querySelector('.progress');
+        const progressBarInner = card.querySelector('.progress-bar');
+        progressBar.style.display = 'block';
+        progressBarInner.style.width = `${progress}%`;
+    }
+
+    function updateFileCard(card, status, fileId, validation) {
+        const statusIndicator = card.querySelector('.status-indicator');
+        const progressBar = card.querySelector('.progress');
+        const resultsDiv = card.querySelector('.validation-results');
+
+        progressBar.style.display = 'none';
+
+        let statusHtml = '';
+        switch (status) {
+            case 'uploading':
+                statusHtml = '<div class="spinner-border spinner-border-sm text-primary" role="status"></div>';
+                break;
+            case 'uploaded':
+                statusHtml = '<span class="status-badge status-success">Uploaded</span>';
+                break;
+            case 'validating':
+                statusHtml = '<div class="spinner-border spinner-border-sm text-info" role="status"></div>';
+                break;
+            case 'valid':
+                statusHtml = '<span class="status-badge status-success">Valid</span>';
+                break;
+            case 'issues':
+                statusHtml = '<span class="status-badge status-warning">Issues Found</span>';
+                break;
+            case 'error':
+                statusHtml = '<span class="status-badge status-danger">Error</span>';
+                break;
+        }
+
+        statusIndicator.innerHTML = statusHtml;
+
+        if (validation && (status === 'valid' || status === 'issues')) {
+            resultsDiv.style.display = 'block';
+            resultsDiv.innerHTML = `
+                <small class="text-muted">
+                    Issues: ${validation.issues ? validation.issues.length : 0} |
+                    Vertices: ${validation.mesh_stats.vertex_count} |
+                    Faces: ${validation.mesh_stats.face_count}
+                </small>
+                <div class="mt-2">
+                    <button class="btn btn-sm btn-outline-primary me-1" onclick="viewDetails('${fileId}')">
+                        <i class="bi bi-eye"></i> View
+                    </button>
+                    <button class="btn btn-sm btn-outline-success me-1" onclick="repairMesh('${fileId}')">
+                        <i class="bi bi-tools"></i> Repair
+                    </button>
+                    <button class="btn btn-sm btn-outline-info" onclick="sliceMesh('${fileId}')">
+                        <i class="bi bi-layers"></i> Slice
+                    </button>
+                </div>
+            `;
+        }
+    }
+
+    function updateStats() {
+        const processed = document.querySelectorAll('.validation-results[style*="display: block"]').length;
+        const valid = document.querySelectorAll('.status-badge.status-success').length;
+
+        document.getElementById('filesProcessed').textContent = processed;
+
+        if (processed > 0) {
+            const rate = Math.round((valid / processed) * 100);
+            document.getElementById('successRate').textContent = `${rate}%`;
+        }
+    }
+
+    function showSettings() {
+        const modal = new bootstrap.Modal(document.getElementById('settingsModal'));
+        modal.show();
+    }
+
+    function saveSettings() {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('settingsModal'));
+        modal.hide();
+    }
+
+    function batchProcess() {
+        (window.enhancedUI?.showNotification)?.('一括処理は準備中です', 'info', 4000);
+    }
+
+    function exportResults() {
+        (window.enhancedUI?.showNotification)?.('エクスポート機能は準備中です', 'info', 4000);
+    }
+
+    function viewDetails(fileId) {
+        window.location.href = `/viewer?file=${fileId}`;
+    }
+
+    function repairMesh(fileId) {
+        (window.enhancedUI?.showNotification)?.(`メッシュ ${fileId} の修復は準備中です`, 'info', 4000);
+    }
+
+    function sliceMesh(fileId) {
+        (window.enhancedUI?.showNotification)?.(`メッシュ ${fileId} のスライスは準備中です`, 'info', 4000);
+    }
+
+    // Check API health on load
+    axios.get('/api/health').then(response => {
+        console.log('API is online:', response.data);
+    }).catch(error => {
+        console.error('API is offline:', error);
+    });
+
+    loadSubscriptionPlans();
+
+    async function loadSubscriptionPlans() {
+        try {
+            const response = await axios.get('/api/payments/plans');
+            if (!response.data.enabled) {
+                return;
+            }
+
+            const plans = response.data.plans || [];
+            if (!plans.length) {
+                return;
+            }
+
+            const subscriptionCard = document.getElementById('subscriptionCard');
+            const featuresContainer = document.getElementById('planFeatures');
+            const buttonsContainer = document.getElementById('planButtons');
+
+            subscriptionCard.style.display = 'block';
+            featuresContainer.innerHTML = '';
+            buttonsContainer.innerHTML = '';
+
+            const monthlyPlans = plans.filter(plan => plan.billing_interval === 'monthly');
+            const buyoutPlans = plans.filter(plan => plan.mode === 'payment');
+
+            const featureListEn = document.createElement('ul');
+            featureListEn.className = 'mb-2';
+            featureListEn.innerHTML = '<strong>Included features</strong>';
+
+            const featureListJa = document.createElement('ul');
+            featureListJa.className = 'mb-2';
+            featureListJa.innerHTML = '<strong>含まれる機能</strong>';
+
+            const aggregatedFeaturesEn = new Set();
+            const aggregatedFeaturesJa = new Set();
+
+            plans.forEach(plan => {
+                (plan.features_en || []).forEach(feature => aggregatedFeaturesEn.add(feature));
+                (plan.features_ja || []).forEach(feature => aggregatedFeaturesJa.add(feature));
+            });
+
+            aggregatedFeaturesEn.forEach(feature => {
+                const item = document.createElement('li');
+                item.textContent = feature;
+                featureListEn.appendChild(item);
+            });
+
+            aggregatedFeaturesJa.forEach(feature => {
+                const item = document.createElement('li');
+                item.textContent = feature;
+                featureListJa.appendChild(item);
+            });
+
+            featuresContainer.appendChild(featureListEn);
+            featuresContainer.appendChild(featureListJa);
+
+            const currencyFormatter = (currency, amount) => {
+                if (typeof amount !== 'number') {
+                    return '';
+                }
+
+                try {
+                    return new Intl.NumberFormat(undefined, {
+                        style: 'currency',
+                        currency,
+                    }).format(amount / 100);
+                } catch (error) {
+                    console.warn('Currency formatting failed:', error);
+                    return `${amount / 100} ${currency.toUpperCase()}`;
+                }
+            };
+
+            monthlyPlans.forEach(plan => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'p-3 border rounded';
+
+                const amount = plan.unit_amount;
+                const currency = plan.currency;
+                const formatted = amount ? currencyFormatter(currency, amount) : '';
+
+                const title = document.createElement('h4');
+                title.className = 'h6 mb-1';
+                title.textContent = plan.label_en;
+                wrapper.appendChild(title);
+
+                const subtitle = document.createElement('p');
+                subtitle.className = 'text-muted mb-2';
+                subtitle.textContent = plan.label_ja;
+                wrapper.appendChild(subtitle);
+
+                if (formatted) {
+                    const price = document.createElement('p');
+                    price.className = 'fw-bold mb-2';
+                    price.textContent = `${formatted} / month`;
+                    wrapper.appendChild(price);
+                }
+
+                const button = document.createElement('button');
+                button.className = 'btn btn-primary-custom w-100';
+                button.textContent = 'Subscribe Monthly';
+                button.onclick = () => startCheckout(plan.id);
+                wrapper.appendChild(button);
+
+                buttonsContainer.appendChild(wrapper);
+            });
+
+            buyoutPlans.forEach(plan => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'p-3 border rounded';
+
+                const amount = plan.unit_amount;
+                const currency = plan.currency;
+                const formatted = amount ? currencyFormatter(currency, amount) : '';
+
+                const title = document.createElement('h4');
+                title.className = 'h6 mb-1';
+                title.textContent = plan.label_en || 'Lifetime License';
+                wrapper.appendChild(title);
+
+                const subtitle = document.createElement('p');
+                subtitle.className = 'text-muted mb-2';
+                subtitle.textContent = plan.label_ja || '買い切りライセンス';
+                wrapper.appendChild(subtitle);
+
+                if (formatted) {
+                    const price = document.createElement('p');
+                    price.className = 'fw-bold mb-2';
+                    const months = plan.buyout_months || 3;
+                    price.textContent = `${formatted} (equivalent to ${months} months)`;
+                    wrapper.appendChild(price);
+                }
+
+                const button = document.createElement('button');
+                button.className = 'btn btn-outline-primary w-100';
+                button.textContent = 'Purchase Lifetime License';
+                button.onclick = () => startCheckout(plan.id);
+                wrapper.appendChild(button);
+
+                buttonsContainer.appendChild(wrapper);
+            });
+
+        } catch (error) {
+            console.warn('Failed to load Stripe plans:', error);
+        }
+    }
+
+    async function startCheckout(planId) {
+        try {
+            const response = await axios.post('/api/payments/checkout', {
+                plan_id: planId
+            });
+
+            if (response.data.checkout_url) {
+                window.location.href = response.data.checkout_url;
+            } else {
+                throw new Error('Checkout URL not returned');
+            }
+        } catch (error) {
+            console.error('Checkout error:', error);
+            (window.enhancedUI?.showNotification)?.('決済の開始に失敗しました', 'error', 6000);
+        }
+    }
+</script>
+{% endblock %}

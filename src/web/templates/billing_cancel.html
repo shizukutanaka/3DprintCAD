@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Billing Cancelled - 3D Print CAD Assistant{% endblock %}
+
+{% block page_title %}Billing Cancelled{% endblock %}
+
+{% block content %}
+<div class="card card-custom">
+    <div class="card-body text-center">
+        <h2 class="h4 mb-3">Subscription Not Completed</h2>
+        <p class="text-muted">Your payment session was cancelled. You can restart the checkout whenever you are ready.</p>
+        {% if session_id %}
+        <p class="small text-muted">Stripe session ID: {{ session_id }}</p>
+        {% endif %}
+        <a href="/" class="btn btn-primary-custom mt-3">Return to Dashboard</a>
+    </div>
+</div>
+{% endblock %}

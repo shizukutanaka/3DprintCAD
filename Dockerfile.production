@@ -1,0 +1,81 @@
+# Multi-stage production Dockerfile for 3D Print CAD Assistant
+FROM python:3.11-slim as base
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Set work directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements.txt requirements_web.txt ./
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt -r requirements_web.txt
+
+# Production stage
+FROM base as production
+
+# Copy only necessary files
+COPY src/ ./src/
+COPY setup.py ./
+COPY LICENSE README.md ./
+
+# Install the application
+RUN pip install --no-cache-dir -e .
+
+# Create directories with proper permissions
+RUN mkdir -p /app/data /app/uploads /app/logs /app/config && \
+    chown -R appuser:appuser /app
+
+# Create health check script
+RUN echo '#!/usr/bin/env python3\n\
+import urllib.request\n\
+import sys\n\
+\n\
+try:\n\
+    response = urllib.request.urlopen("http://localhost:8080/health", timeout=10)\n\
+    if response.getcode() == 200:\n\
+        sys.exit(0)\n\
+    else:\n\
+        sys.exit(1)\n\
+except Exception:\n\
+    sys.exit(1)' > /app/healthcheck.py && \
+    chmod +x /app/healthcheck.py && \
+    chown appuser:appuser /app/healthcheck.py
+
+# Security hardening
+RUN chmod -R 755 /app && \
+    chmod -R 644 /app/src && \
+    find /app -type f -name "*.py" -exec chmod 644 {} \;
+
+USER appuser
+
+# Expose port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python /app/healthcheck.py
+
+# Default command
+CMD ["python", "-m", "src.web.app", "--host", "0.0.0.0", "--port", "8080"]

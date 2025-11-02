@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: cad-assistant-web
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/data
+      - ./src:/app/src:ro
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - MAX_CONTENT_LENGTH=104857600  # 100MB
+      - WORKERS=4
+      - THREADS=2
+    restart: unless-stopped
+    networks:
+      - cadnet
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.cad-assistant.rule=Host(`cad.local`)"
+      - "traefik.http.services.cad-assistant.loadbalancer.server.port=5000"
+
+  nginx:
+    image: nginx:alpine
+    container_name: cad-assistant-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./data/static:/usr/share/nginx/html/static:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - web
+    restart: unless-stopped
+    networks:
+      - cadnet
+
+  redis:
+    image: redis:7-alpine
+    container_name: cad-assistant-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    networks:
+      - cadnet
+
+networks:
+  cadnet:
+    driver: bridge
+
+volumes:
+  redis-data:

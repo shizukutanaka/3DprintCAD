@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Workflow Dashboard - 3D Print CAD Assistant{% endblock %}
+
+{% block page_title %}Workflow Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .workflow-grid {
+        display: grid;
+        grid-template-columns: 1fr 2fr 1fr;
+        gap: var(--ds-space-300);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="workflow-grid">
+    <div class="stats-column">
+        <div class="card card-custom mb-4">
+            <div class="card-header"><h3 class="h6 mb-0">Quick Stats</h3></div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-8">Active Workflows</dt>
+                    <dd class="col-sm-4 text-end">0</dd>
+                    <dt class="col-sm-8">Completed Today</dt>
+                    <dd class="col-sm-4 text-end">0</dd>
+                    <dt class="col-sm-8">Avg. Time</dt>
+                    <dd class="col-sm-4 text-end">0h</dd>
+                    <dt class="col-sm-8">Success Rate</dt>
+                    <dd class="col-sm-4 text-end">0%</dd>
+                </dl>
+            </div>
+        </div>
+        <div class="card card-custom mb-4">
+            <div class="card-header"><h3 class="h6 mb-0">System Resources</h3></div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between mb-1"><small>CPU Usage</small><small>35%</small></div>
+                    <div class="progress-custom">
+                        <div class="progress-bar" style="width: 35%"></div>
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between mb-1"><small>Memory</small><small>60%</small></div>
+                    <div class="progress-custom">
+                        <div class="progress-bar" style="width: 60%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="main-column">
+        <div class="card card-custom mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="h6 mb-0">Active Workflows</h3>
+                <button class="btn btn-primary-custom btn-sm">New Workflow</button>
+            </div>
+            <div class="card-body">
+                <div class="text-center p-5" id="empty-workflows">
+                    <i class="bi bi-rocket-takeoff" style="font-size: 3rem; color: var(--ds-neutral-40);"></i>
+                    <h4 class="h5 mt-3">No Active Workflows</h4>
+                    <p class="text-muted">Start a new workflow to begin.</p>
+                </div>
+                <div id="active-workflows-grid" style="display: none;">
+                    <!-- Active workflows will be dynamically populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="details-column">
+        <div class="card card-custom mb-4">
+            <div class="card-header"><h3 class="h6 mb-0">Workflow Details</h3></div>
+            <div class="card-body">
+                <div class="text-center p-5" id="no-workflow-selected">
+                    <i class="bi bi-clipboard-data" style="font-size: 3rem; color: var(--ds-neutral-40);"></i>
+                    <h4 class="h5 mt-3">No Workflow Selected</h4>
+                    <p class="text-muted">Select a workflow to see its details.</p>
+                </div>
+                <div id="workflow-details-panel" style="display: none;">
+                    <!-- Workflow details will be dynamically populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Analysis - 3D Print CAD Assistant{% endblock %}
+
+{% block page_title %}Analysis Tools{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card card-custom mb-4">
+            <div class="card-header">
+                <h3 class="h6 mb-0">Structural Analysis</h3>
+            </div>
+            <div class="card-body">
+                <form id="structural-analysis-form">
+                    <div class="mb-3">
+                        <label for="sa-file" class="form-label">3D Model File</label>
+                        <input class="form-control" type="file" id="sa-file" accept=".stl,.obj,.step">
+                    </div>
+                    <div class="mb-3">
+                        <label for="sa-material" class="form-label">Material</label>
+                        <select class="form-select" id="sa-material">
+                            <option>Steel</option>
+                            <option>Aluminum</option>
+                            <option>PLA</option>
+                            <option>ABS</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="sa-force" class="form-label">Force (N)</label>
+                        <input type="number" class="form-control" id="sa-force" value="1000">
+                    </div>
+                    <button type="submit" class="btn btn-primary-custom">Run Analysis</button>
+                </form>
+            </div>
+            <div class="card-footer" style="display: none;" id="sa-results-footer">
+                 <h4 class="h6">Results</h4>
+                 <div id="sa-results"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card card-custom mb-4">
+            <div class="card-header">
+                <h3 class="h6 mb-0">Topology Optimization</h3>
+            </div>
+            <div class="card-body">
+                 <form id="topo-optimization-form">
+                    <div class="mb-3">
+                        <label for="to-file" class="form-label">3D Model File</label>
+                        <input class="form-control" type="file" id="to-file" accept=".stl,.obj,.step">
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="to-volume-fraction" class="form-label">Volume Fraction (%)</label>
+                            <input type="number" class="form-control" id="to-volume-fraction" value="30">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="to-iterations" class="form-label">Max Iterations</label>
+                            <input type="number" class="form-control" id="to-iterations" value="50">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary-custom">Run Optimization</button>
+                </form>
+            </div>
+             <div class="card-footer" style="display: none;" id="to-results-footer">
+                 <h4 class="h6">Results</h4>
+                 <div id="to-results"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

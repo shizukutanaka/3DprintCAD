@@ -1,0 +1,454 @@
+{% extends "base.html" %}
+
+{% block title %}3D Viewer - 3D Print CAD Assistant{% endblock %}
+
+{% block page_title %}3D Viewer{% endblock %}
+
+{% block extra_css %}
+<style>
+    #viewer-container {
+        height: calc(100vh - 220px); /* Adjust based on header/footer height */
+        background: #1e293b;
+        border-radius: 12px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .viewer-controls {
+        position: absolute;
+        top: var(--ds-space-200);
+        right: var(--ds-space-200);
+        background: var(--ds-surface-overlay);
+        border: 1px solid var(--ds-bg-neutral-bold);
+        border-radius: var(--ds-border-radius);
+        padding: var(--ds-space-200);
+        box-shadow: var(--ds-shadow-overlay);
+        z-index: 1000;
+        min-width: 200px;
+    }
+
+    .viewer-info {
+        position: absolute;
+        bottom: var(--ds-space-200);
+        left: var(--ds-space-200);
+        background: var(--ds-surface-overlay);
+        border: 1px solid var(--ds-bg-neutral-bold);
+        border-radius: var(--ds-border-radius);
+        padding: var(--ds-space-200);
+        box-shadow: var(--ds-shadow-overlay);
+        z-index: 1000;
+    }
+
+    .axis-helper {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        width: 100px;
+        height: 100px;
+        z-index: 1000;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+        <div class="card card-custom mb-4">
+            <div class="card-body">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--ds-space-300);">
+                    <h2 style="font-size: 1.125rem; font-weight: 600; margin: 0; color: var(--ds-neutral-100);">3D Model Viewer</h2>
+                    <div style="display: flex; gap: var(--ds-space-100);">
+                        <button class="btn-primary-custom" onclick="loadSampleModel()">
+                            <i class="bi bi-box"></i> Load Sample
+                        </button>
+                        <button class="btn-default" onclick="resetView()">
+                            <i class="bi bi-arrow-counterclockwise"></i> Reset View
+                        </button>
+                    </div>
+                </div>
+
+                <div id="viewer-container">
+                    <div class="viewer-controls">
+                        <h6 style="font-size: 0.875rem; font-weight: 600; margin: 0 0 var(--ds-space-200) 0; color: var(--ds-neutral-100);">Display Options</h6>
+                        <div style="margin-bottom: var(--ds-space-100);">
+                            <label style="display: flex; align-items: center; cursor: pointer; gap: var(--ds-space-100);">
+                                <input class="form-check-input" type="checkbox" id="wireframeToggle" onchange="toggleWireframe()" style="margin: 0; cursor: pointer;">
+                                <span style="font-size: 0.875rem; color: var(--ds-neutral-100);">Wireframe</span>
+                            </label>
+                        </div>
+                        <div style="margin-bottom: var(--ds-space-100);">
+                            <label style="display: flex; align-items: center; cursor: pointer; gap: var(--ds-space-100);">
+                                <input class="form-check-input" type="checkbox" id="normalsToggle" onchange="toggleNormals()" style="margin: 0; cursor: pointer;">
+                                <span style="font-size: 0.875rem; color: var(--ds-neutral-100);">Show Normals</span>
+                            </label>
+                        </div>
+                        <div style="margin-bottom: var(--ds-space-100);">
+                            <label style="display: flex; align-items: center; cursor: pointer; gap: var(--ds-space-100);">
+                                <input class="form-check-input" type="checkbox" id="gridToggle" checked onchange="toggleGrid()" style="margin: 0; cursor: pointer;">
+                                <span style="font-size: 0.875rem; color: var(--ds-neutral-100);">Show Grid</span>
+                            </label>
+                        </div>
+                        <div style="margin-bottom: var(--ds-space-200);">
+                            <label style="display: flex; align-items: center; cursor: pointer; gap: var(--ds-space-100);">
+                                <input class="form-check-input" type="checkbox" id="shadowsToggle" checked onchange="toggleShadows()" style="margin: 0; cursor: pointer;">
+                                <span style="font-size: 0.875rem; color: var(--ds-neutral-100);">Shadows</span>
+                            </label>
+                        </div>
+                        <div style="margin-bottom: var(--ds-space-200);">
+                            <label for="materialSelect" style="font-size: 0.75rem; font-weight: 600; color: var(--ds-neutral-80); display: block; margin-bottom: var(--ds-space-050);">Material</label>
+                            <select class="form-select form-select-sm" id="materialSelect" onchange="changeMaterial()" style="font-size: 0.875rem; padding: var(--ds-space-100); border: 1px solid var(--ds-neutral-10); border-radius: var(--ds-border-radius); background: var(--ds-surface-overlay);">
+                                <option value="plastic">Plastic</option>
+                                <option value="metal">Metal</option>
+                                <option value="glass">Glass</option>
+                                <option value="matte">Matte</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="colorPicker" style="font-size: 0.75rem; font-weight: 600; color: var(--ds-neutral-80); display: block; margin-bottom: var(--ds-space-050);">Color</label>
+                            <input type="color" class="form-control form-control-color" id="colorPicker" value="#0052CC" onchange="changeColor()" style="width: 100%; height: 32px; border: 1px solid var(--ds-neutral-10); border-radius: var(--ds-border-radius); cursor: pointer;">
+                        </div>
+                    </div>
+
+                    <div class="viewer-info">
+                        <h6 style="font-size: 0.875rem; font-weight: 600; margin: 0 0 var(--ds-space-100) 0; color: var(--ds-neutral-100);">Model Info</h6>
+                        <div style="font-size: 0.75rem; color: var(--ds-neutral-60);">
+                            <div style="margin-bottom: var(--ds-space-050);">Vertices: <strong style="color: var(--ds-neutral-100);"><span id="vertexCount">-</span></strong></div>
+                            <div style="margin-bottom: var(--ds-space-050);">Faces: <strong style="color: var(--ds-neutral-100);"><span id="faceCount">-</span></strong></div>
+                            <div>Size: <strong style="color: var(--ds-neutral-100);"><span id="modelSize">-</span></strong></div>
+                        </div>
+                    </div>
+
+                    <canvas id="axisHelper" class="axis-helper"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="card card-custom">
+            <div class="card-body">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--ds-space-300);">
+                    <h3 style="font-size: 1.125rem; font-weight: 600; margin: 0; color: var(--ds-neutral-100);">Analysis Results</h3>
+                    <span class="status-badge status-success">Ready to Print</span>
+                </div>
+                <div class="row">
+                    <div class="col-md-3">
+                        <div style="text-align: center; padding: var(--ds-space-300); border: 1px solid var(--ds-bg-neutral-bold); border-radius: var(--ds-border-radius); background: var(--ds-bg-neutral-subtle);">
+                            <i class="bi bi-check-circle" style="font-size: 2rem; color: var(--ds-success);"></i>
+                            <div style="margin-top: var(--ds-space-150);">
+                                <div style="font-weight: 600; color: var(--ds-neutral-100);">Watertight</div>
+                                <small style="color: var(--ds-neutral-60);">No holes detected</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div style="text-align: center; padding: var(--ds-space-300); border: 1px solid var(--ds-bg-neutral-bold); border-radius: var(--ds-border-radius); background: var(--ds-bg-neutral-subtle);">
+                            <i class="bi bi-exclamation-triangle" style="font-size: 2rem; color: var(--ds-warning);"></i>
+                            <div style="margin-top: var(--ds-space-150);">
+                                <div style="font-weight: 600; color: var(--ds-neutral-100);">Overhangs</div>
+                                <small style="color: var(--ds-neutral-60);">3 areas need support</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div style="text-align: center; padding: var(--ds-space-300); border: 1px solid var(--ds-bg-neutral-bold); border-radius: var(--ds-border-radius); background: var(--ds-bg-neutral-subtle);">
+                            <i class="bi bi-rulers" style="font-size: 2rem; color: var(--ds-info);"></i>
+                            <div style="margin-top: var(--ds-space-150);">
+                                <div style="font-weight: 600; color: var(--ds-neutral-100);">Wall Thickness</div>
+                                <small style="color: var(--ds-neutral-60);">Min: 1.2mm</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div style="text-align: center; padding: var(--ds-space-300); border: 1px solid var(--ds-bg-neutral-bold); border-radius: var(--ds-border-radius); background: var(--ds-bg-neutral-subtle);">
+                            <i class="bi bi-layers" style="font-size: 2rem; color: var(--ds-brand-primary);"></i>
+                            <div style="margin-top: var(--ds-space-150);">
+                                <div style="font-weight: 600; color: var(--ds-neutral-100);">Print Time</div>
+                                <small style="color: var(--ds-neutral-60);">Est. 3h 45min</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Three.js for 3D rendering -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.150.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.150.0/examples/js/loaders/STLLoader.js"></script>
+
+<script>
+    let scene, camera, renderer, controls;
+    let mesh, wireframe, grid;
+    let container = document.getElementById('viewer-container');
+
+    function init() {
+        // Scene setup
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1e293b);
+
+        // Camera setup
+        camera = new THREE.PerspectiveCamera(
+            75,
+            container.clientWidth / container.clientHeight,
+            0.1,
+            1000
+        );
+        camera.position.set(100, 100, 100);
+
+        // Renderer setup
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        // Controls
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(50, 50, 50);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.camera.left = -50;
+        directionalLight.shadow.camera.right = 50;
+        directionalLight.shadow.camera.top = 50;
+        directionalLight.shadow.camera.bottom = -50;
+        scene.add(directionalLight);
+
+        // Grid
+        grid = new THREE.GridHelper(200, 20, 0x444444, 0x222222);
+        scene.add(grid);
+
+        // Load initial model or show placeholder
+        loadSampleModel();
+
+        // Start animation loop
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', onWindowResize);
+    }
+
+    function loadSampleModel() {
+        // Create a sample cube for demonstration
+        const geometry = new THREE.BoxGeometry(30, 30, 30);
+        const material = new THREE.MeshPhongMaterial({
+            color: 0x2563eb,
+            specular: 0x111111,
+            shininess: 200
+        });
+
+        if (mesh) {
+            scene.remove(mesh);
+        }
+
+        mesh = new THREE.Mesh(geometry, material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        scene.add(mesh);
+
+        // Update info
+        document.getElementById('vertexCount').textContent = geometry.attributes.position.count;
+        document.getElementById('faceCount').textContent = geometry.index ? geometry.index.count / 3 : 'N/A';
+        document.getElementById('modelSize').textContent = '30 x 30 x 30 mm';
+
+        // Center camera on model
+        resetView();
+    }
+
+    function loadSTLFile(fileId) {
+        const loader = new THREE.STLLoader();
+        loader.load(
+            `/uploads/${fileId}`,
+            function (geometry) {
+                const material = new THREE.MeshPhongMaterial({
+                    color: 0x2563eb,
+                    specular: 0x111111,
+                    shininess: 200
+                });
+
+                if (mesh) {
+                    scene.remove(mesh);
+                }
+
+                mesh = new THREE.Mesh(geometry, material);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+
+                // Center and scale model
+                geometry.center();
+                const box = new THREE.Box3().setFromObject(mesh);
+                const size = box.getSize(new THREE.Vector3());
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const scale = 100 / maxDim;
+                mesh.scale.set(scale, scale, scale);
+
+                scene.add(mesh);
+
+                // Update info
+                document.getElementById('vertexCount').textContent = geometry.attributes.position.count;
+                document.getElementById('faceCount').textContent = geometry.index ? geometry.index.count / 3 : 'N/A';
+                document.getElementById('modelSize').textContent =
+                    `${size.x.toFixed(1)} x ${size.y.toFixed(1)} x ${size.z.toFixed(1)} mm`;
+
+                resetView();
+            },
+            function (xhr) {
+                console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function (error) {
+                console.error('Error loading STL:', error);
+            }
+        );
+    }
+
+    function toggleWireframe() {
+        if (mesh) {
+            mesh.material.wireframe = document.getElementById('wireframeToggle').checked;
+        }
+    }
+
+    function toggleNormals() {
+        // Implementation for normal visualization
+        console.log('Toggle normals');
+    }
+
+    function toggleGrid() {
+        grid.visible = document.getElementById('gridToggle').checked;
+    }
+
+    function toggleShadows() {
+        renderer.shadowMap.enabled = document.getElementById('shadowsToggle').checked;
+    }
+
+    function changeMaterial() {
+        if (!mesh) return;
+
+        const materialType = document.getElementById('materialSelect').value;
+        let material;
+
+        switch (materialType) {
+            case 'metal':
+                material = new THREE.MeshStandardMaterial({
+                    color: mesh.material.color,
+                    metalness: 0.8,
+                    roughness: 0.2
+                });
+                break;
+            case 'glass':
+                material = new THREE.MeshPhysicalMaterial({
+                    color: mesh.material.color,
+                    transparent: true,
+                    opacity: 0.5,
+                    roughness: 0.1,
+                    transmission: 0.9
+                });
+                break;
+            case 'matte':
+                material = new THREE.MeshLambertMaterial({
+                    color: mesh.material.color
+                });
+                break;
+            default:
+                material = new THREE.MeshPhongMaterial({
+                    color: mesh.material.color,
+                    specular: 0x111111,
+                    shininess: 200
+                });
+        }
+
+        mesh.material = material;
+    }
+
+    function changeColor() {
+        if (mesh) {
+            mesh.material.color.set(document.getElementById('colorPicker').value);
+        }
+    }
+
+    function resetView() {
+        if (mesh) {
+            const box = new THREE.Box3().setFromObject(mesh);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+
+            camera.position.set(maxDim * 2, maxDim * 2, maxDim * 2);
+            camera.lookAt(center);
+            controls.target.copy(center);
+            controls.update();
+        }
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+
+        // Rotate mesh slowly
+        if (mesh && !controls.enabled) {
+            mesh.rotation.y += 0.005;
+        }
+
+        renderer.render(scene, camera);
+        renderAxisHelper();
+    }
+
+    function renderAxisHelper() {
+        const canvas = document.getElementById('axisHelper');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = 100;
+        canvas.height = 100;
+
+        ctx.clearRect(0, 0, 100, 100);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+
+        // Draw axes
+        ctx.beginPath();
+        ctx.strokeStyle = '#ef4444';
+        ctx.moveTo(50, 50);
+        ctx.lineTo(90, 50);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.strokeStyle = '#10b981';
+        ctx.moveTo(50, 50);
+        ctx.lineTo(50, 10);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.strokeStyle = '#3b82f6';
+        ctx.moveTo(50, 50);
+        ctx.lineTo(70, 70);
+        ctx.stroke();
+
+        // Labels
+        ctx.fillStyle = '#fff';
+        ctx.font = '12px Arial';
+        ctx.fillText('X', 92, 52);
+        ctx.fillText('Y', 52, 10);
+        ctx.fillText('Z', 72, 72);
+    }
+
+    function onWindowResize() {
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+    }
+
+    // Check for file parameter in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const fileId = urlParams.get('file');
+    if (fileId) {
+        loadSTLFile(fileId);
+    }
+
+    // Initialize viewer
+    init();
+</script>
+{% endblock %}

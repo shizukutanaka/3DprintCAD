@@ -100,17 +100,37 @@ class ComplianceManager:
         self.requirements = self._load_compliance_requirements()
 
     def _get_or_create_encryption_key(self) -> bytes:
-        """Get or create encryption key for sensitive data"""
+        """Get or create encryption key for sensitive data.
+
+        Security: Keys are loaded from PRINTCAD_ENCRYPTION_KEY environment variable
+        in production. File-based keys are used only in development.
+        """
+        # First, check environment variable (production/hardened deployments)
+        env_key = os.environ.get('PRINTCAD_ENCRYPTION_KEY')
+        if env_key:
+            try:
+                # Validate it's a valid Fernet key
+                key = env_key.encode() if isinstance(env_key, str) else env_key
+                Fernet(key)  # Verify key validity
+                logger.info("Using encryption key from PRINTCAD_ENCRYPTION_KEY environment variable")
+                return key
+            except Exception as exc:
+                logger.error("Invalid encryption key in PRINTCAD_ENCRYPTION_KEY: %s", exc)
+                raise ValueError("Invalid PRINTCAD_ENCRYPTION_KEY environment variable") from exc
+
+        # Fallback to file-based key for development (with warnings)
         key_file = self.data_dir / "compliance.key"
 
         if key_file.exists():
             with open(key_file, 'rb') as f:
                 key = f.read()
             self._harden_key_file(key_file)
+            logger.warning("Using file-based encryption key. Set PRINTCAD_ENCRYPTION_KEY for production.")
             return key
 
         key = Fernet.generate_key()
         self._write_encryption_key(key, key_file)
+        logger.warning("Generated new encryption key. Set PRINTCAD_ENCRYPTION_KEY for production deployments.")
         return key
 
     def _write_encryption_key(self, key: bytes, key_file: Optional[Path] = None) -> None:

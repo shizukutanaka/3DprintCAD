@@ -123,12 +123,13 @@ python -m src.cli_main --help
 >   import: the `EvolvedCollaborationManager` class is a stub whose
 >   `__init__` calls a method that only exists on a different class,
 >   and the module instantiates the manager at import time.
-> - Several optional modules in `src/core/` import third-party
->   packages that are not declared in `requirements.txt` (pandas,
->   PyJWT, boto3, sympy, opencv-python, Pillow) and fail to import
->   without them. `advanced_ecosystem_manager` and
->   `ecosystem_integration_manager` also rely on `pkg_resources`,
->   which setuptools 81 and later no longer provide.
+> - Some modules in `src/core/` fail to import in environments where
+>   the heavier declared packages are not installed (for example
+>   `torch` and `numba`, which are declared but are not part of a
+>   minimal install). All third-party packages imported by `src/`
+>   are now declared in `requirements.txt` / `pyproject.toml`;
+>   import-guarded optional integrations (translation, speech, GPU)
+>   are declared in the `full` extra in `pyproject.toml`.
 > - One fatigue-recommendation description string in
 >   `src/core/simulation_based_design.py` is garbled (`.0f`); the
 >   original text is unrecoverable.

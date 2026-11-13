@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import importlib
 import inspect
-import pkg_resources
+from importlib.metadata import distributions
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, asdict, field
 from enum import Enum
@@ -79,11 +79,11 @@ class EcosystemIntegrationManager:
 
         # インストール済みパッケージから3Dプリント関連ツールを検索
         try:
-            installed_packages = pkg_resources.working_set
+            installed_packages = distributions()
             cad_keywords = ["cad", "3d", "print", "stl", "mesh", "slicer", "cura", "prusa", "blender"]
 
             for package in installed_packages:
-                package_name = package.project_name.lower()
+                package_name = (package.metadata.get("Name") or "").lower()
 
                 # CAD/3Dプリント関連のパッケージを検出
                 if any(keyword in package_name for keyword in cad_keywords):
@@ -134,12 +134,12 @@ class EcosystemIntegrationManager:
     def _analyze_package(self, package) -> Optional[Dict[str, Any]]:
         """パッケージを分析"""
         try:
-            # パッケージのメタデータを取得
-            metadata = package.get_metadata("METADATA") if hasattr(package, 'get_metadata') else ""
-
             # 関連性スコアを計算
             relevance_score = 0
-            package_name = package.project_name.lower()
+            package_name = (package.metadata.get("Name") or "").lower()
+
+            # パッケージのメタデータを取得
+            metadata = package.read_text("METADATA") or ""
 
             # CAD関連キーワードでスコアリング
             cad_keywords = {
@@ -155,7 +155,7 @@ class EcosystemIntegrationManager:
 
             if relevance_score >= 5:  # 最低スコア閾値
                 return {
-                    "name": package.project_name,
+                    "name": package.metadata.get("Name"),
                     "type": self._categorize_tool(package_name),
                     "version": getattr(package, 'version', 'unknown'),
                     "relevance_score": relevance_score,
@@ -163,7 +163,7 @@ class EcosystemIntegrationManager:
                 }
 
         except Exception as e:
-            self.logger.debug(f"Package analysis failed for {package.project_name}: {str(e)}")
+            self.logger.debug(f"Package analysis failed for {package_name}: {str(e)}")
 
         return None
 

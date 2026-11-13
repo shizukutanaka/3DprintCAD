@@ -57,13 +57,17 @@ pip install -e .
 
 **CLI - Validate a single model:**
 ```bash
-printcad model.stl --output report.json --summary
+python -m src.cli_main model.stl --output report.json --summary
 ```
 
 **CLI - Batch processing:**
 ```bash
-printcad --batch "models/*.stl" --parallel --auto-summary
+python -m src.cli_main --pattern "models/*.stl" --auto-summary
 ```
+
+> **Note:** the CLI does not start in the current code — see
+> "Installation (local CLI)" below for the known issues that must be
+> fixed in code first.
 
 **Web Interface:**
 ```bash
@@ -75,7 +79,7 @@ python run_server.py --host 0.0.0.0 --port 5000
 
 ## What's Included
 
-- **CLI Tool** (`printcad`): Validation, repair, batch processing with comprehensive reporting
+- **CLI Tool** (`python -m src.cli_main`): Validation, repair, batch processing with comprehensive reporting
 - **Web Application**: Intuitive interface for file upload, validation, and 3D visualization
 - **RESTful API**: Integration-ready endpoints for external systems
 - **Health Monitoring**: System diagnostics and operational metrics
@@ -106,9 +110,22 @@ pip install -e .
 Confirm the command works:
 
 ```bash
-printcad --help
 python -m src.cli_main --help
 ```
+
+> **Known issues — the CLI currently does not start at all.** Two code
+> defects (not documentation problems) block every CLI entry point:
+>
+> 1. The `printcad` console script declared in `pyproject.toml` and
+>    `setup.py` points at `src.cli:main`, but `src/cli.py` does not
+>    exist in this repository, so `printcad --help` fails immediately.
+> 2. The module entry point above fails as well: `src/cli_main.py`
+>    currently has a syntax error (an unmatched `)` around line 3638),
+>    so the module cannot even be imported.
+>
+> Until both are fixed in code, the CLI is unusable; the Web
+> application (`python run_server.py`, see below) is the working
+> entry point.
 
 ---
 
@@ -132,7 +149,7 @@ python -m src.cli_main --help
 ### Single-model validation
 
 ```bash
-printcad model.stl \
+python -m src.cli_main model.stl \
   --output reports/model.json \
   --summary \
   --hash-manifest manifests/production.json
@@ -141,8 +158,7 @@ printcad model.stl \
 ### Batch with watchdog fallback
 
 ```bash
-printcad --batch "models/*.stl" \
-  --parallel \
+python -m src.cli_main --pattern "models/*.stl" \
   --max-workers 4 \
   --auto-summary \
   --auto-metrics \
@@ -198,14 +214,20 @@ PY
 
 ## Configuration management
 
-Settings cascade in `src/core/config.py`:
+Configuration lives in two places:
 
-1. Repository defaults (`default_config.yaml` embedded).
-2. Files under `PRINTCAD_CONFIG_DIR` or the working directory.
-3. Environment variables (e.g., `MAX_UPLOAD_MB`, `MAX_WORKERS`).
-4. CLI arguments.
+- **CLI** (`src/cli_main.py`): configuration files are searched in the
+  working directory first, then in the directory named by the
+  `PRINTCAD_CONFIG_DIR` environment variable, falling back to embedded
+  defaults. Environment variables (e.g., `MAX_UPLOAD_MB`, `MAX_WORKERS`)
+  and CLI arguments override file values.
+- **Application settings** (`src/core/config.py`): `ConfigManager`
+  keeps the user configuration in `config.yaml` under
+  `~/.config/printcad/` (on Windows, `%APPDATA%\printcad\`), creating
+  the directory on first use. There is no `config/` directory in this
+  repository.
 
-Edit `config/production.yaml` (example):
+Example `config.yaml`:
 
 ```yaml
 application:
@@ -236,7 +258,7 @@ logging:
 docker compose up --build
 ```
 
-`docker-compose.yml` starts the app, Postgres, and Redis with development defaults. For hardened settings, use `docker-compose.production.yml` and supply an `.env` file for secrets.
+`docker-compose.yml` starts the web app, nginx, and Redis with development defaults (there is no Postgres service in the compose file). For hardened settings, use `docker-compose.production.yml` and supply an `.env` file for secrets.
 
 ### Kubernetes
 
@@ -329,14 +351,12 @@ Add optional scanners to CI (examples): `pip-audit`, `bandit`, `trivy fs .`.
 
 ### For Users
         - **[Installation Guide](docs/PRODUCTION_DEPLOYMENT.md)**: Complete setup instructions for production
-        - **[User Guide](docs/USER_GUIDE.md)**: End-to-end usage documentation
-        - **[API Reference](docs/API.md)**: Complete API endpoint documentation
-        - **[FAQ](docs/FAQ.md)**: Frequently asked questions
+        - **[User Guide](USER_GUIDE.md)**: End-to-end usage documentation
+        - **[API Reference](API_REFERENCE.md)**: Complete API endpoint documentation
 
 ### For Administrators
 - **[Production Deployment Guide](docs/PRODUCTION_DEPLOYMENT.md)**: Enterprise deployment with Kubernetes
 - **[Security Hardening](docs/SECURITY_HARDENING.md)**: Government-grade security configuration
-- **[Monitoring & Operations](docs/OPERATIONS.md)**: Operational runbooks and procedures
 - **[Automation Guide](docs/AUTOMATION_GUIDE.md)**: End-to-end automation workflows and safeguards
 - **[Improvements Implemented](docs/IMPROVEMENTS_IMPLEMENTED.md)**: Logged enhancements ready for rollout
 - **[Improvement Backlog (High Priority)](docs/improvement_backlog_high_priority.md)**: Upcoming operational initiatives
@@ -344,7 +364,6 @@ Add optional scanners to CI (examples): `pip-audit`, `bandit`, `trivy fs .`.
 ### For Developers
 - **[Architecture Overview](docs/overview.md)**: System design and component documentation
 - **[Development Guide](docs/DEVELOPMENT.md)**: Contributing and development setup
-- **[API Integration](docs/INTEGRATION.md)**: Integration examples and SDKs
 - **[Changelog](CHANGELOG.md)**: Version history and release notes
 
 ---
@@ -417,7 +436,8 @@ git clone <repository-url>
 cd 3DprintCAD
 python3.11 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt -r requirements_dev.txt
+pip install -r requirements.txt
+pip install -e ".[dev]"
 
 # Run tests
 pytest tests/ -v --cov=src
@@ -456,7 +476,7 @@ bandit -r src/
 3D Print CAD Assistant is released under the **MIT License**. See [LICENSE](LICENSE) for details.
 
 ```
-Copyright (c) 2025 Your Organization
+Copyright (c) 2024 3DprintCAD Team
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -503,8 +523,6 @@ Built with these excellent open-source projects:
 - [ ] Mobile application (iOS/Android)
 - [ ] Advanced slicing algorithms
 - [ ] Integration with popular CAD software
-
-See [ROADMAP.md](docs/ROADMAP.md) for complete development plans.
 
 ---
 

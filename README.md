@@ -135,18 +135,29 @@ python -m src.cli_main --help
 >   were removed — nothing in the repository referenced the missing
 >   names. The `src.cloud` package had the same defect (`.sync` /
 >   `.backup`) and is fixed.
-> - `psutil` is now declared in `pyproject.toml` as well as in
->   `requirements.txt`. It is imported unconditionally at module
->   level (including by the `printcad` entry point), so a plain
->   `pip install .` previously produced a `printcad` that failed
->   with `ModuleNotFoundError: No module named 'psutil'`.
-> - Some modules in `src/core/` fail to import in environments where
->   the heavier declared packages are not installed (for example
->   `torch` and `numba`, which are declared but are not part of a
->   minimal install). All third-party packages imported by `src/`
->   are now declared in `requirements.txt` / `pyproject.toml`;
->   import-guarded optional integrations (translation, speech, GPU)
->   are declared in the `full` extra in `pyproject.toml`.
+> - Dependency declarations are now unified in `pyproject.toml`,
+>   the single source of truth. `requirements.txt` declares no
+>   packages itself; it only installs the project with the `dev`
+>   extra. The two lists had drifted in both directions: `psutil`
+>   was declared only in `requirements.txt` (so a plain
+>   `pip install .` produced a `printcad` that failed with
+>   `ModuleNotFoundError: No module named 'psutil'`), and `pydantic`
+>   only in `pyproject.toml` (so a `requirements.txt` environment
+>   could not import `src.core.config_pydantic`). A plain
+>   `pip install .` previously left 20 of the project's own modules
+>   unimportable (`torch`, Flask, `google-cloud-storage`,
+>   `matplotlib`, …); all of them import now. Import-guarded
+>   optional integrations (translation, speech, GPU) remain in the
+>   `full` extra. `setup.py` also claimed Python >=3.8 while
+>   `pyproject.toml` requires >=3.9; it now agrees.
+> - The Docker builds do not work, independently of the above:
+>   both Dockerfiles `COPY` a `requirements_web.txt` that does not
+>   exist in the repository, and they install dependencies before
+>   the source tree is copied, so they cannot consume the
+>   project-reference form of `requirements.txt` either. The same
+>   missing file is referenced by `production-deploy.yml` and by
+>   `CONTRIBUTING.md` (there as `requirements_dev.txt`). Repairing
+>   the container/deployment path is a separate follow-up.
 > - One fatigue-recommendation description string in
 >   `src/core/simulation_based_design.py` is garbled (`.0f`); the
 >   original text is unrecoverable.

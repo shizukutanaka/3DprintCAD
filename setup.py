@@ -14,7 +14,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=find_packages(include=["src", "src.*"]),
-    python_requires=">=3.8",
+    python_requires=">=3.9",
     # Dependency declarations live in pyproject.toml ([project] and
     # [project.optional-dependencies]) as the single source of truth.
     # This file intentionally declares none: setuptools merges the two
@@ -32,7 +32,6 @@ setup(
         "Topic :: Multimedia :: Graphics :: 3D Modeling",
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",

@@ -1,6 +1,7 @@
 """Optimized mesh loader combining fast loading with structured approach."""
 from __future__ import annotations
 
+import hashlib
 import mmap
 import struct
 import logging
@@ -13,6 +14,8 @@ from ..core.memory_manager import memory_monitored_operation, get_memory_manager
 from ..core.exceptions import MeshLoadError
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_HASH_CHUNK_SIZE = 1024 * 1024
 
 
 class BaseMeshLoader(ABC):

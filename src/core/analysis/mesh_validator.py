@@ -14,8 +14,6 @@ import numpy as np
 import trimesh
 import logging
 
-from .manifold_validator import ManifoldValidationResult, validate_manifold
-from .watertightness import WatertightnessResult, validate_watertightness
 from .ai_defect_detector import detect_defects_with_ai
 
 
@@ -64,6 +62,20 @@ class MeshValidationMetrics:
     manifold_statistics: Dict[str, Any]
     watertightness_statistics: Dict[str, Any]
 
+    @staticmethod
+    def _json_safe(value: Any) -> Any:
+        """Convert numpy values nested in statistics dicts to plain Python
+        values so validation results stay JSON serializable."""
+        if isinstance(value, dict):
+            return {key: MeshValidationMetrics._json_safe(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [MeshValidationMetrics._json_safe(item) for item in value]
+        if isinstance(value, np.ndarray):
+            return MeshValidationMetrics._json_safe(value.tolist())
+        if isinstance(value, np.generic):
+            return value.item()
+        return value
+
     def as_dict(self) -> Dict[str, Any]:
         return {
             "surface_area_mm2": self.surface_area_mm2,
@@ -89,8 +101,8 @@ class MeshValidationMetrics:
             "auto_orientation_bed_area_mm2": self.auto_orientation_bed_area_mm2,
             "flatness_deviation_mm": self.flatness_deviation_mm,
             "repair_suggestions": self.repair_suggestions,
-            "manifold_statistics": self.manifold_statistics,
-            "watertightness_statistics": self.watertightness_statistics,
+            "manifold_statistics": self._json_safe(self.manifold_statistics),
+            "watertightness_statistics": self._json_safe(self.watertightness_statistics),
         }
 
 
@@ -279,6 +291,12 @@ def validate_mesh(
                 severity="error",
             )
         )
+
+    # Imported here to avoid a module-level import cycle: both
+    # manifold_validator and watertightness import ValidationIssue from
+    # this module.
+    from .manifold_validator import validate_manifold
+    from .watertightness import validate_watertightness
 
     try:
         manifold_result = validate_manifold(mesh)
@@ -659,7 +677,9 @@ def _estimate_min_wall_thickness(
 
     # Normalize directions
     directions = -valid_normals / np.linalg.norm(valid_normals, axis=1, keepdims=True)
-    origins = valid_centers - directions * epsilon
+    # Offset the origins epsilon inside the solid along the ray direction;
+    # distances below compensate by adding epsilon back.
+    origins = valid_centers + directions * epsilon
 
     min_thickness = np.inf
     ray = mesh.ray
@@ -672,8 +692,8 @@ def _estimate_min_wall_thickness(
         batch_directions = directions[i:batch_end]
 
         locations, ray_indices, _ = ray.intersects_location(
-            origins=batch_origins,
-            directions=batch_directions,
+            ray_origins=batch_origins,
+            ray_directions=batch_directions,
         )
 
         if locations.size == 0:
@@ -690,7 +710,7 @@ def _estimate_min_wall_thickness(
             positive = distances > epsilon
 
             if np.any(positive):
-                thickness = float(np.min(distances[positive]))
+                thickness = float(np.min(distances[positive])) + epsilon
                 min_thickness = min(min_thickness, thickness)
 
     if not np.isfinite(min_thickness):
@@ -732,7 +752,6 @@ def _analyze_sections(mesh: trimesh.Trimesh) -> Tuple[int, int, Optional[float]]
         plane_origin=mesh.centroid,
         plane_normal=[0, 0, 1],
         heights=np.linspace(mesh.bounds[0, 2], mesh.bounds[1, 2], num=6),
-        cached=False,
     )
 
     cavities = 0
@@ -818,13 +837,13 @@ def _count_high_aspect_ratio_faces(mesh: trimesh.Trimesh, threshold: float = 10.
     if mesh.faces.size == 0:
         return 0
 
-    edges = mesh.edges_face
     edge_lengths = mesh.edges_unique_length
-    if edges.size == 0 or edge_lengths.size == 0:
+    if edge_lengths.size == 0:
         return 0
 
-    # Vectorized computation using advanced indexing
-    lengths = edge_lengths[mesh.edges_unique_inverse[edges]]
+    # Per-face edge lengths: edges_unique_inverse maps every face edge
+    # (three consecutive entries per face) to its unique edge.
+    lengths = edge_lengths[mesh.edges_unique_inverse].reshape(-1, 3)
 
     # Use numpy's ptp (peak to peak) for efficiency
     with np.errstate(divide='ignore', invalid='ignore'):

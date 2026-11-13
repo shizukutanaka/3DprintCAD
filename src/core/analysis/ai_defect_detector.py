@@ -1,135 +1,3 @@
-"""AI-powered defect detection for 3D mesh validation using machine learning."""
-
-from __future__ import annotations
-
-from dataclasses import dataclass, field
-from typing import List, Optional, Tuple, Dict, Any, Union
-import logging
-import numpy as np
-import trimesh
-from enum import Enum
-
-# ML libraries
-try:
-    from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.model_selection import train_test_split
-    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-    SKLEARN_AVAILABLE = True
-except ImportError:
-    SKLEARN_AVAILABLE = False
-
-try:
-    import torch
-    import torch.nn as nn
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
-
-
-class AIDefectType(Enum):
-    """Types of defects detectable by AI."""
-    NON_MANIFOLD_EDGES = "non_manifold_edges"
-    HOLES = "holes"
-    SELF_INTERSECTIONS = "self_intersections"
-    THIN_WALLS = "thin_walls"
-    OVERHANGS = "overhangs"
-    POOR_SURFACE_QUALITY = "poor_surface_quality"
-    STRUCTURAL_WEAKNESSES = "structural_weaknesses"
-    SCALING_ISSUES = "scaling_issues"
-    ORIENTATION_PROBLEMS = "orientation_problems"
-
-
-class AIModelType(Enum):
-    """Types of AI models for defect detection."""
-    RANDOM_FOREST = "random_forest"
-    GRADIENT_BOOSTING = "gradient_boosting"
-    NEURAL_NETWORK = "neural_network"
-    ENSEMBLE = "ensemble"
-
-
-@dataclass
-class AIDefectDetectionResult:
-    """Result of AI-powered defect detection."""
-
-    defect_type: AIDefectType
-    confidence: float
-    severity: str  # "low", "medium", "high", "critical"
-    location: Optional[List[float]] = None  # 3D coordinates
-    description: str = ""
-    suggested_fix: Optional[str] = None
-    feature_importance: Dict[str, float] = field(default_factory=dict)
-
-    def as_dict(self) -> Dict[str, Any]:
-        return {
-            "defect_type": self.defect_type.value,
-            "confidence": self.confidence,
-            "severity": self.severity,
-            "location": self.location,
-            "description": self.description,
-            "suggested_fix": self.suggested_fix,
-            "feature_importance": self.feature_importance,
-        }
-
-
-@dataclass
-class AIMeshFeatures:
-    """Features extracted from mesh for AI analysis."""
-
-    # Geometric features
-    surface_area: float
-    volume: float
-    bounding_box_volume: float
-    aspect_ratio: float
-    compactness: float
-
-    # Topology features
-    vertex_count: int
-    face_count: int
-    edge_count: int
-    euler_characteristic: int
-    genus: int
-
-    # Quality features
-    min_edge_length: float
-    max_edge_length: float
-    avg_edge_length: float
-    min_face_area: float
-    max_face_area: float
-    avg_face_area: float
-
-    # Structural features
-    min_wall_thickness: float
-    overhang_ratio: float
-    cavity_count: int
-    floating_parts: int
-
-    def to_array(self) -> np.ndarray:
-        """Convert features to numpy array for ML models."""
-        return np.array([
-            self.surface_area,
-            self.volume,
-            self.bounding_box_volume,
-            self.aspect_ratio,
-            self.compactness,
-            self.vertex_count,
-            self.face_count,
-            self.edge_count,
-            self.euler_characteristic,
-            self.genus,
-            self.min_edge_length,
-            self.max_edge_length,
-            self.avg_edge_length,
-            self.min_face_area,
-            self.max_face_area,
-            self.avg_face_area,
-            self.min_wall_thickness,
-            self.overhang_ratio,
-            self.cavity_count,
-            self.floating_parts,
-        ])
-
-
 """Advanced AI-powered defect detection for 3D mesh validation using deep learning."""
 
 from __future__ import annotations
@@ -145,6 +13,7 @@ import pickle
 from pathlib import Path
 import hashlib
 import time
+import threading
 
 # ML libraries
 try:
@@ -2803,6 +2672,11 @@ class AIAnalysisPipeline:
 _enhanced_ai_detector = AIDefectDetector()
 _online_learning_system = OnlineLearningSystem(_enhanced_ai_detector)
 _ai_pipeline = AIAnalysisPipeline()
+
+
+def detect_defects_with_ai(mesh: trimesh.Trimesh) -> List[AIDefectDetectionResult]:
+    """Detect defects in *mesh* with the AI detector (basic entry point)."""
+    return _ai_pipeline.ai_detector.detect_defects(mesh)
 
 
 def detect_defects_with_enhanced_ai(mesh: trimesh.Trimesh,

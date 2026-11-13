@@ -85,13 +85,13 @@ def _configure_talisman(app: Flask, config_name: str) -> None:
         strict_transport_security_include_subdomains=True,
         strict_transport_security_preload=True,
         session_cookie_secure=(config_name == 'production'),
-        session_cookie_httponly=True,
+        session_cookie_http_only=True,
         session_cookie_samesite='Lax',
         content_security_policy=csp,
         content_security_policy_nonce_in=['script-src', 'style-src'],
         referrer_policy='strict-origin-when-cross-origin',
         x_content_type_options='nosniff',
-        x_frame_options='DENY',
+        frame_options='DENY',
         x_xss_protection=True,
     )
 
@@ -239,7 +239,7 @@ SECURITY_CHECKLIST = {
     },
     'cookies': {
         'session_cookie_secure': 'HTTPS-only cookies in production',
-        'session_cookie_httponly': 'Prevents JavaScript access to session',
+        'session_cookie_http_only': 'Prevents JavaScript access to session',
         'session_cookie_samesite': 'Prevents CSRF attacks',
     },
     'rate_limiting': {

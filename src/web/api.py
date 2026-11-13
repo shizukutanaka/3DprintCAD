@@ -26,6 +26,7 @@ from ..core.input_validator import (
     MESH_VALIDATION_RULES,
     SLICE_SETTINGS_RULES
 )
+from ..core.rate_limiter import rate_limit
 from ..core.automation import (
     auto_validate_file,
     auto_repair_file,
@@ -622,47 +623,6 @@ def generate_3d_from_text_api():
                 'error': 'Generation failed',
                 'warnings': result.warnings
             }), 400
-
-    except Exception as e:
-        logger.exception("AI 3D generation error")
-        return jsonify({'error': 'Internal server error'}), 500
-
-@api_bp.route('/ai/chat', methods=['POST'])
-@rate_limit('ai_chat_requests', 20, 60)  # 20 requests per minute
-def ai_chat_api():
-    """AI chat assistant for design help."""
-    try:
-        data = request.get_json()
-        if not data or 'query' not in data:
-            return jsonify({'error': 'Missing query parameter'}), 400
-
-        query = data['query'].strip()
-        if not query:
-            return jsonify({'error': 'Empty query'}), 400
-
-        if len(query) > 1000:
-            return jsonify({'error': 'Query too long (max 1000 characters)'}), 400
-
-        context = data.get('context', {})
-
-        # Get AI response
-        result = chat_with_ai_assistant(query, context)
-
-        response_data = {
-            'answer': result.get('answer', 'I\'m sorry, I couldn\'t process your question.'),
-            'suggestions': result.get('suggestions', []),
-            'confidence': result.get('confidence', 0.0)
-        }
-
-        # Add code snippets if available
-        if 'code_snippets' in result and result['code_snippets']:
-            response_data['code_snippets'] = result['code_snippets']
-
-        return jsonify({
-            'success': False,
-            'error': 'Generation failed',
-            'warnings': result.warnings
-        }), 400
 
     except Exception as e:
         logger.exception("AI 3D generation error")

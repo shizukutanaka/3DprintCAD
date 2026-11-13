@@ -531,4 +531,4 @@ SLICE_SETTINGS_RULES = [
 
 
 # Global validator instance
-input_validator = InputValidator()
+input_validator = SecurityValidator()

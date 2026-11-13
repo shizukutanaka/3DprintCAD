@@ -10,7 +10,9 @@ import psutil
 import threading
 import resource
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Callable, Union
+from typing import Any, Dict, List, Optional, Tuple, Callable, Union, Generic, TypeVar
+from dataclasses import dataclass, field
+from enum import Enum, auto
 from tqdm import tqdm
 
 class MemoryMonitor(threading.Thread):
@@ -1660,57 +1662,6 @@ class ParallelProcessor(Generic[T, R]):
                 f"Peak memory {peak_mem:.1f}%, "
                 f"{self._processed_count / max(1, duration):.1f} items/s"
             )
-            mem = psutil.virtual_memory()
-            swap = psutil.swap_memory()
-            
-            # Calculate available resources with safety margins
-            available_mem_gb = mem.available / (1024 ** 3)
-            
-            # Adjust max workers based on available memory and CPU
-            max_workers = min(
-                cpu_count,
-                max(1, int(available_mem_gb / 1.5)),  # 1 worker per 1.5GB of available memory
-                cpu_count * 2  # Don't exceed 2x CPU count
-            )
-            
-            # Calculate memory limit per worker (in bytes) with safety margin
-            mem_per_worker = int((mem.total * 0.75) / max_workers)  # Use 75% of total memory
-            
-            # Get process info for current process
-            process = psutil.Process()
-            
-            return {
-                'max_workers': max_workers,
-                'memory_per_worker': mem_per_worker,
-                'cpu_percent': 100 / max_workers,
-                'total_memory_gb': mem.total / (1024 ** 3),
-                'available_memory_gb': available_mem_gb,
-                'used_memory_gb': mem.used / (1024 ** 3),
-                'swap_total_gb': swap.total / (1024 ** 3),
-                'swap_used_gb': swap.used / (1024 ** 3),
-                'cpu_count': cpu_count,
-                'process_memory_mb': process.memory_info().rss / (1024 ** 2),
-                'process_threads': process.num_threads(),
-                'timestamp': time.time()
-            }
-            
-        except Exception as e:
-            # Fallback to conservative defaults if resource detection fails
-            return {
-                'max_workers': 2,
-                'memory_per_worker': 1 * 1024 * 1024 * 1024,  # 1GB
-                'cpu_percent': 50.0,
-                'total_memory_gb': 4.0,
-                'available_memory_gb': 2.0,
-                'used_memory_gb': 2.0,
-                'swap_total_gb': 0.0,
-                'swap_used_gb': 0.0,
-                'cpu_count': 2,
-                'process_memory_mb': 100.0,
-                'process_threads': 1,
-                'timestamp': time.time(),
-                'error': str(e)
-            }
     
     @classmethod
     def calculate_optimal_batch_size(
@@ -1958,72 +1909,6 @@ class ParallelProcessor(Generic[T, R]):
             
         return results
     
-    def _process_batch_with_retry(
-        self,
-        pool: multiprocessing.Pool,
-            try:
-                # Process items in parallel
-                batch_results = []
-                for result in pool.imap_unordered(
-                    self._process_item_wrapper,
-                    [(
-                        item['item'], 
-                        process_func, 
-                        {**process_args, 'attempt': item['attempt']}
-                    ) for item in current_batch],
-                    chunksize=max(1, len(current_batch) // (pool._processes * 2) or 1)
-                ):
-                    batch_results.append(result)
-                    pbar.update(1)
-                
-                # Update work items with results
-                result_map = {str(r.get('item', '')): r for r in batch_results}
-                
-                for work_item in current_batch:
-                    item_key = str(work_item['item'])
-                    if item_key in result_map:
-                        result = result_map[item_key]
-                        work_item.update({
-                            'success': result.get('success', False),
-                            'result': result,
-                            'last_error': result.get('error')
-                        })
-                
-            except Exception as e:
-                error_msg = str(e)
-                self.logger.error(
-                    f"Batch processing error (attempt {attempt + 1}/{max_retries}): {error_msg}",
-                    exc_info=self.verbose
-                )
-                
-                # Update failed items with error information
-                for work_item in current_batch:
-                    if not work_item['success']:
-                        work_item.update({
-                            'last_error': error_msg,
-                            'success': False
-                        })
-                
-                if attempt == max_retries:
-                    self.logger.error(
-                        f"Max retries ({max_retries}) reached for batch processing"
-                    )
-        
-        # Compile final results
-        final_results = []
-        for work_item in work_items:
-            if work_item['success'] and work_item['result']:
-                final_results.append(work_item['result'])
-            else:
-                final_results.append({
-                    'item': work_item['item'],
-                    'success': False,
-                    'error': work_item.get('last_error', 'Unknown error'),
-                    'attempts': work_item['attempt'] + 1,
-                    'timestamp': time.time()
-                })
-        
-        return final_results
     
     @staticmethod
     def _process_item_wrapper(args_tuple: Tuple[Any, Callable, Dict]) -> Dict[str, Any]:

@@ -13,7 +13,8 @@ import uuid
 import unicodedata
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple, Iterable, Set
-from concurrent.futures import ProcessPoolExecutor, BrokenProcessPool, wait, FIRST_COMPLETED
+from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED
+from concurrent.futures.process import BrokenProcessPool
 import multiprocessing
 import threading
 import gc
@@ -1392,8 +1393,8 @@ Examples:
   # Basic validation
   printcad model.stl
 
-  # Batch processing with parallel execution
-  printcad --batch "models/*.stl" --parallel --max-workers 4
+  # Batch processing with a glob pattern
+  printcad --pattern "models/*.stl" --max-workers 4
 
   # Advanced analysis with repair and slicing
   printcad model.stl --repair --slice --gcode --layer-height 0.15
@@ -1402,13 +1403,13 @@ Examples:
   printcad model.stl --min-wall 1.0 --min-feature 0.5 --overhang-angle 45
 
   # Compliance and security
-  printcad model.stl --hash-manifest manifest.json --enable-cache
+  printcad model.stl --hash-manifest manifest.json
 
   # Export results
-  printcad model.stl --output results.json --summary-output summary.json
+  printcad model.stl --output results.json --summary
 
   # Batch with detailed reporting
-  printcad --batch "*.stl" --summary --metrics-output metrics.jsonl --failure-output failures.json
+  printcad --pattern "*.stl" --summary --metrics-output metrics.jsonl --failure-output failures.json
 
 Environment Variables:
   SECRET_KEY              Flask session encryption key
@@ -3594,111 +3595,7 @@ Configuration Files:
                 if not (args.files or args.pattern or args.input_dir):
                     print("No input files specified. Use -h for help.")
                     return 1
-
-        def process_batch(self, files: List[Path], args: argparse.Namespace) -> List[Dict[str, Any]]:
-            """Process a batch of mesh files with optimized parallel processing.
             
-            Args:
-                files: List of file paths to process
-                args: Command line arguments
-                
-            Returns:
-                List of processing results
-            """
-            if not files:
-                return []
-
-            total_files = len(files)
-            start_time = time.monotonic()
-            results: List[Dict[str, Any]] = []
-            
-            # 並列処理が無効またはファイルが1つの場合は逐次処理
-            if not args.parallel or total_files == 1:
-                return self._process_files_sequential(files, args, 0, total_files, start_time)
-
-            try:
-                # システムリソースに基づいて並列数を動的に決定
-                cpu_count = os.cpu_count() or 1
-                available_memory = psutil.virtual_memory().available / (1024 ** 3)  # GB単位
-                
-                # メモリ制約を考慮した最大並列数の計算
-                max_by_memory = max(1, int(available_memory / 2))  # 2GBあたり1プロセス
-                max_workers = min(
-                    self.max_worker_limit,
-                    cpu_count,
-                    max_by_memory,
-                    total_files
-                )
-                
-                # バッチサイズを動的に調整
-                try:
-                    avg_file_size = sum(f.stat().st_size for f in files) / total_files if total_files > 0 else 0
-                    batch_size = self._calculate_optimal_batch_size(avg_file_size, max_workers)
-                except (OSError, AttributeError):
-                )
-            return formatted_results if 'formatted_results' in locals() else []
-            
-    def _process_single_file(self, file_path: Path, args: argparse.Namespace, **kwargs) -> Dict[str, Any]:
-        """Process a single file (wrapper for parallel processing)."""
-        try:
-            return self.process_mesh(file_path, args)
-        except Exception as e:
-            return {
-                'file': str(file_path),
-                'error': str(e),
-                'success': False,
-                'traceback': traceback.format_exc()
-            }
-                else:
-                    # Sequential hash computation (original implementation)
-                    for file in files:
-                        hash_ok, hash_value = self._compute_file_hash(file)
-                        if hash_ok:
-                            hashes[str(file)] = hash_value
-
-                            manifest_ok, manifest_error, expected_digest = self._verify_manifest_digest(file, hash_value)
-                            if not manifest_ok:
-                                manifest_failures.append({
-                                    "file": str(file),
-                                    "error": manifest_error,
-                                    "expected": expected_digest,
-                                    "observed": hash_value
-                                })
-                        else:
-                            manifest_failures.append({
-                                "file": str(file),
-                                "error": hash_value,
-                                "expected": None,
-                                "observed": None
-                            })
-
-                ordered_hashes = {path: hashes[path] for path in sorted(hashes)}
-                payload = {
-                    "files": ordered_hashes,
-                    "compliance": self._compliance_metadata()
-                }
-
-                if args.output:
-                    args.output.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
-                else:
-                    print(json.dumps(payload, indent=2, ensure_ascii=False))
-
-                if manifest_failures:
-                    for failure in manifest_failures:
-                        print(
-                            json.dumps(
-                                {
-                                    "file": failure["file"],
-                                    "error": failure["error"],
-                                    "expected_sha256": failure["expected"],
-                                    "observed_sha256": failure["observed"]
-                                },
-                                indent=2,
-                                ensure_ascii=False
-                            )
-                        )
-                    return 1
-                return 0
 
             # Process files
             if len(files) == 1 and not args.batch:
@@ -3794,6 +3691,18 @@ Configuration Files:
                 traceback.print_exc(file=sys.stderr)
 
             return 1  # General error
+
+    def _process_single_file(self, file_path: Path, args: argparse.Namespace, **kwargs) -> Dict[str, Any]:
+        """Process a single file (wrapper for parallel processing)."""
+        try:
+            return self.process_mesh(file_path, args)
+        except Exception as e:
+            return {
+                'file': str(file_path),
+                'error': str(e),
+                'success': False,
+                'traceback': traceback.format_exc()
+            }
 
 
 def main(argv: Optional[list[str]] = None) -> int:

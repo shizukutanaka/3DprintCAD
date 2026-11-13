@@ -1530,6 +1530,11 @@ Configuration Files:
             help="Fail run if computed risk score exceeds the specified value",
         )
         parser.add_argument(
+            "--summary-output",
+            type=Path,
+            help="Write session summary to the specified JSON file",
+        )
+        parser.add_argument(
             "--metrics-output",
             type=Path,
             help="Write per-file metrics to a JSONL or JSON file",
@@ -1737,12 +1742,9 @@ Configuration Files:
         if args.max_workers < 1:
             parser.error("--max-workers must be at least 1")
 
-        if args.max_workers and not args.parallel:
-            parser.error("--max-workers requires --parallel")
-
-        if args.parallel and not args.batch:
-            parser.error("--parallel requires --batch")
-
+        # Note: there are no --parallel/--batch flags; batch processing is
+        # implied by multiple inputs and parallelism is governed by
+        # --max-workers, so only the worker count itself is validated here.
         if args.max_workers > self.max_worker_limit:
             print(
                 f"--max-workers requested {args.max_workers} but limit is {self.max_worker_limit}; using {self.max_worker_limit}.",
@@ -1750,19 +1752,8 @@ Configuration Files:
             )
             args.max_workers = self.max_worker_limit
 
-        if getattr(args, "exit_on_first_failure", False) and args.parallel:
-            parser.error("--exit-on-first-failure cannot be combined with --parallel")
-
         if getattr(args, "worker_timeout", None) is not None and args.worker_timeout <= 0:
             parser.error("--worker-timeout must be positive")
-
-        # Validate file requirements
-        source_count = len(args.files or []) + (1 if args.pattern else 0) + (1 if args.input_dir else 0)
-        if args.batch and source_count < 2:
-            parser.error("--batch requires multiple mesh paths")
-
-        if args.pattern and not args.batch:
-            parser.error("--pattern requires --batch")
 
         if args.aggressive_repair and not args.repair:
             args.repair = True
@@ -2323,6 +2314,8 @@ Configuration Files:
         if digest.lower() != expected_digest.lower():
             return False, "SHA-256 digest does not match manifest entry", expected_digest
 
+        return True, None, expected_digest
+
     def _get_cache_key(self, file_path: Path, args_hash: str) -> str:
         """Generate cache key for a file and processing arguments."""
         file_stat = file_path.stat()
@@ -2362,6 +2355,8 @@ Configuration Files:
             self.logger.debug(f"Cached result for {cache_key}")
         except Exception:
             pass  # Cache save failure should not affect processing
+
+    def _get_current_memory_usage_mb(self) -> float:
         """Get current process memory usage in MB."""
         try:
             import psutil
@@ -2374,17 +2369,6 @@ Configuration Files:
         except Exception:
             # Any other error, return 0
             return 0.0
-        return result
-
-        # Save to cache if enabled and processing was successful
-        if cache_enabled and result.get("success"):
-            try:
-                self._save_to_cache(cache_key, result)
-            except Exception:
-                pass  # Cache save failure should not affect result
-
-        result["processing_time"] = time.time() - start_time
-        return result
 
     def _analyze_processing_times(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Analyze processing times and provide detailed breakdown."""
@@ -2703,8 +2687,8 @@ Configuration Files:
                     with watchdog_timer(min(timeout_seconds * 0.2, 60), f"validate_mesh_{file_path.name}"):
                         mesh_validator = _lazy_import_mesh_validator()
                         settings = mesh_validator.MeshValidationSettings(
-                            min_wall_thickness=args.min_wall,
-                            min_feature_size=args.min_feature,
+                            min_wall_thickness_mm=args.min_wall,
+                            min_feature_size_mm=args.min_feature,
                             support_overhang_angle_deg=args.overhang_angle,
                         )
                         validation = mesh_validator.validate_mesh(mesh, settings=settings)
@@ -2956,7 +2940,7 @@ Configuration Files:
                 "message_ja": f"高いメモリ使用量を検出しました: +{memory_delta_mb:.1f} MB"
             })
             result["warning_count"] = result.get("warning_count", 0) + 1
-            self.logger.warning("High memory usage for %s: +%.1f MB", file_path, memory_delta_mb)
+            self.logger.warning(f"High memory usage for {file_path}: +{memory_delta_mb:.1f} MB")
 
         result["processing_time"] = time.time() - start_time
         return result
@@ -3254,6 +3238,7 @@ Configuration Files:
         readiness_counts: Dict[str, int] = {}
         readiness_scores: List[float] = []
         manifest_warning_count = 0
+        overall_warning_count = 0
 
         for result in results:
             for issue in result.get("issues", []) or []:
@@ -3532,10 +3517,11 @@ Configuration Files:
                 return 0
 
             if getattr(args, 'benchmark', None):
-                if not files:
+                benchmark_files, _benchmark_hints = self.find_mesh_files(args)
+                if not benchmark_files:
                     print("No files specified for benchmarking", file=sys.stderr)
                     return 1
-                self._run_benchmark(files[0], args.benchmark, args)
+                self._run_benchmark(benchmark_files[0], args.benchmark, args)
                 return 0
 
             # Setup logging
@@ -3558,14 +3544,16 @@ Configuration Files:
                 enable_json_logging=True
             )
 
-            # Create session context with enhanced metadata
+            # Create session context with enhanced metadata. Batch mode is
+            # implied by multiple inputs; parallel mode by the worker count
+            # (there are no --batch/--parallel flags or a user_id argument).
+            batch_mode = len(args.files or []) > 1 or bool(args.pattern) or bool(args.input_dir)
+            parallel_mode = (args.max_workers or 1) > 1
             context = create_context(
                 session_id=self.session_id,
                 operation="cli_processing",
-                user_id=getattr(args, 'user_id', None),
-                batch_mode=getattr(args, 'batch', False),
-                parallel_mode=getattr(args, 'parallel', False),
-                language_mode=self.language_mode
+                batch_mode=batch_mode,
+                parallel_mode=parallel_mode
             )
             self.logger.set_context(context)
 
@@ -3575,8 +3563,8 @@ Configuration Files:
                 extra={
                     "session_id": self.session_id,
                     "operation": "cli_processing",
-                    "batch_mode": getattr(args, 'batch', False),
-                    "parallel_mode": getattr(args, 'parallel', False),
+                    "batch_mode": batch_mode,
+                    "parallel_mode": parallel_mode,
                     "verbose_mode": getattr(args, 'verbose', False)
                 }
             )
@@ -3595,12 +3583,21 @@ Configuration Files:
                 if not (args.files or args.pattern or args.input_dir):
                     print("No input files specified. Use -h for help.")
                     return 1
+                print("No matching mesh files found for the given input.")
+                return 1
             
 
             # Process files
-            if len(files) == 1 and not args.batch:
+            if len(files) == 1:
                 # Single file mode
-                if args.progress:
+                result = self.process_mesh(files[0], args)
+
+                if args.output:
+                    args.output.write_text(json.dumps(result, indent=2, ensure_ascii=False))
+                    if args.progress:
+                        print(f"Report saved to: {args.output}")
+
+                if getattr(args, "metrics_output", None):
                     self._write_metrics_output(args.metrics_output, [result])
 
                 if getattr(args, "failure_output", None):
@@ -3657,27 +3654,27 @@ Configuration Files:
             return 130  # Standard exit code for SIGINT
 
         except FileNotFoundError as exc:
-            self.logger.error("File not found: %s", exc)
+            self.logger.error(f"File not found: {exc}")
             print(f"File not found: {exc}", file=sys.stderr)
             return 2  # No such file or directory
 
         except PermissionError as exc:
-            self.logger.error("Permission denied: %s", exc)
+            self.logger.error(f"Permission denied: {exc}")
             print(f"Permission denied: {exc}", file=sys.stderr)
             return 13  # Permission denied
 
         except MemoryError as exc:
-            self.logger.error("Out of memory: %s", exc)
+            self.logger.error(f"Out of memory: {exc}")
             print("Out of memory. Try processing fewer files or reducing memory usage.", file=sys.stderr)
             return 137  # Out of memory (SIGKILL)
 
         except (BrokenProcessPool, RuntimeError) as exc:
-            self.logger.error("Processing runtime error: %s", exc)
+            self.logger.error(f"Processing runtime error: {exc}")
             print(f"Processing error: {exc}", file=sys.stderr)
             return 70  # Software error
 
         except Exception as exc:
-            self.logger.error("Unexpected error during CLI execution: %s", exc, exc_info=True)
+            self.logger.error(f"Unexpected error during CLI execution: {exc}")
             error_msg = self._format_locale_string(
                 f"Unexpected error: {exc}",
                 f"予期せぬエラー: {exc}"

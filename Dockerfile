@@ -16,8 +16,9 @@ ENV PATH="/opt/venv/bin:$PATH"
 # of truth) and requirements.txt only references the project, so the
 # former "copy the requirements files first, install them, then copy
 # the source" layering cannot work: the install needs the source
-# tree (and README.md, which pyproject.toml names as the readme)
-# to be present.
+# tree to be present. (README.md, which pyproject.toml names as the
+# package readme, must be in the context as well — see .dockerignore
+# — or the built package silently loses its long description.)
 WORKDIR /build
 COPY . .
 RUN pip install --no-cache-dir --upgrade pip && \

@@ -157,8 +157,10 @@ python -m src.cli_main --help
 >   the source tree, so neither could consume the
 >   project-reference form of `requirements.txt`. The `Dockerfile`
 >   now installs the project from `pyproject.toml` after copying
->   the source (`.dockerignore` re-includes `README.md`, which
->   the build needs). The parallel "production" chain was not
+>   the source (`.dockerignore` re-includes `README.md`: without
+>   it the build still succeeds, but the package silently loses
+>   the long description `pyproject.toml` declares). The parallel
+>   "production" chain was not
 >   repairable in the same way and was removed: `Dockerfile.
 >   production` (its `CMD` ran `python -m src.web.app`, which has
 >   no `__main__` entry point and exits at once), `docker-compose.

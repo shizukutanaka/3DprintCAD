@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import locale
+import logging
 import os
 from dataclasses import dataclass, field
 from enum import Enum
@@ -1533,6 +1534,9 @@ class MultiLanguageDocumentationGenerator:
 """
         return content
 
+
+# Global i18n manager instance
+_i18n = I18nManager()
 
 # Initialize translation manager
 translation_manager = TranslationManager()

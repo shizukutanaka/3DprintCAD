@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import List, Optional, Tuple, Dict, Any, Union, Callable
 import os
 import json
@@ -84,8 +85,8 @@ class CloudProject:
 
     id: str
     name: str
-    description: Optional[str] = None
     owner_id: str
+    description: Optional[str] = None
     files: List[CloudFile] = field(default_factory=list)
     collaborators: Dict[str, str] = field(default_factory=dict)  # user_id -> role
     created_at: datetime = field(default_factory=datetime.now)

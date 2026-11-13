@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import List, Optional, Tuple, Dict, Any, Union, Callable
 import time
 import uuid
@@ -65,9 +66,9 @@ class CollaborativeDesign:
     """A design being collaboratively worked on."""
     id: str
     name: str
+    owner_id: str
     description: Optional[str] = None
     current_version: str = "1.0.0"
-    owner_id: str
     collaborators: Dict[str, CollaborationUser] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.now)
     modified_at: datetime = field(default_factory=datetime.now)

@@ -19,7 +19,7 @@ try:
 except ImportError:
     TEXT_TO_SPEECH_AVAILABLE = False
 
-from .core.i18n_optimized import Language, I18nManager
+from ..core.i18n_optimized import Language, I18nManager
 
 class SpeechToTextManager:
     """Multi-language speech-to-text conversion with translation support."""

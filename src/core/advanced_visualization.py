@@ -3,7 +3,7 @@
 import json
 import time
 import logging
-from typing import Dict, List, Any, Optional, Tuple, Union
+from typing import Callable, Dict, List, Any, Optional, Tuple, Union
 from dataclasses import dataclass, field
 from enum import Enum
 import threading

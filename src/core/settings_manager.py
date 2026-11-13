@@ -89,7 +89,6 @@ class QualityProfile:
     # Layer settings
     layer_height: float
     first_layer_height: float
-    adaptive_layers: bool = False
 
     # Print speeds
     print_speed: float
@@ -101,6 +100,9 @@ class QualityProfile:
     gap_fill_speed: float
     travel_speed: float
     first_layer_speed: float
+
+    # Layer options (a field with a default must follow the required fields above)
+    adaptive_layers: bool = False
 
     # Acceleration
     default_acceleration: float = 1000.0

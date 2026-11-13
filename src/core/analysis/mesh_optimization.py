@@ -9,7 +9,7 @@ import time
 
 import numpy as np
 import trimesh
-from trimesh import smoothing, decimation
+from trimesh import smoothing
 from scipy.spatial import KDTree
 from scipy.optimize import minimize
 

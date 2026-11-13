@@ -65,9 +65,9 @@ python -m src.cli_main model.stl --output report.json --summary
 python -m src.cli_main --pattern "models/*.stl" --auto-summary
 ```
 
-> **Note:** invoke the CLI as `python -m src.cli_main`. The
-> `printcad` console script installed by `pip install -e .` does
-> not work yet — see "Installation (local CLI)" below.
+> **Note:** after `pip install -e .`, the CLI is also available as
+> the `printcad` console script; `printcad ...` and
+> `python -m src.cli_main ...` are equivalent.
 
 **Web Interface:**
 ```bash
@@ -113,22 +113,28 @@ Confirm the command works:
 python -m src.cli_main --help
 ```
 
-> **Known issue — the `printcad` console script does not work yet.**
-> The CLI itself works when invoked as a module
-> (`python -m src.cli_main ...`): single-file, batch, pattern,
-> benchmark, and repair runs all complete successfully. However, the
-> `printcad` entry point declared in `pyproject.toml` and `setup.py`
-> still points at `src.cli:main`, and `src/cli.py` does not exist in
-> this repository, so the `printcad` command fails immediately with
-> `ModuleNotFoundError`. Use the module form until the entry point is
-> fixed in code.
+> **Known issues.** All three entry points work: the `printcad`
+> console script, the module form (`python -m src.cli_main ...` —
+> single-file, batch, pattern, benchmark, and repair runs), and the
+> Web application (`python run_server.py`). A few pre-existing
+> defects remain in modules off those paths:
 >
-> Separately, several modules outside the CLI code path still
-> contain syntax errors and cannot be imported (parts of `src/core/`
-> and `src/sustainability/`, among others). This also affects the
-> Web application: `src/web/app.py` has an indentation error, so
-> `python run_server.py` currently fails at startup as well. At this
-> time the module-form CLI above is the working entry point.
+> - `src/core/i18n_optimized.py` does not define `get_text`, but
+>   18 modules in `src/core/` import it (`multi_material_simulator`
+>   and several `advanced_*` / `enhanced_*` modules, among others);
+>   those modules still fail at import time.
+> - `src/core/progress.py` uses `@contextmanager` without importing
+>   it, so importing that module fails with `NameError`. This also
+>   blocks collection of `tests/test_end_to_end_integration.py`.
+> - `src/core/ai_mesh_repair.py` defines `RealTimePrintOptimizer`
+>   and `MLPrintOptimizer` twice; the later definitions silently
+>   override the earlier ones.
+> - One fatigue-recommendation description string in
+>   `src/core/simulation_based_design.py` is garbled (`.0f`); the
+>   original text is unrecoverable.
+> - The `[tool.setuptools]` package list in `pyproject.toml` is
+>   incomplete (for example, `src.web` is not listed). Editable
+>   installs (`pip install -e .`) are unaffected.
 
 ---
 

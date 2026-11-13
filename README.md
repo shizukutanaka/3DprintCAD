@@ -119,10 +119,24 @@ python -m src.cli_main --help
 > Web application (`python run_server.py`). A few pre-existing
 > defects remain in modules off those paths:
 >
-> - `src/core/cloud_collaboration_evolution.py` still fails to
->   import: the `EvolvedCollaborationManager` class is a stub whose
->   `__init__` calls a method that only exists on a different class,
->   and the module instantiates the manager at import time.
+> - `src/core/cloud_collaboration_evolution.py` imports again: the
+>   stub `EvolvedCollaborationManager` (whose `__init__` called a
+>   method that only exists on a different class), its import-time
+>   instantiation, and the module-level convenience functions that
+>   delegated to it were removed — nothing in the repository
+>   referenced them. The file still contains duplicated class
+>   definitions and a block of manager methods merged into
+>   `RemotePrintController` that nothing references.
+> - Three other package `__init__` modules still import submodules
+>   that do not exist, so those packages fail to import:
+>   `src/collaboration` (`.sync_engine`), `src/cost` (`.pricing`),
+>   and `src/plugins` (`.hooks`). The `src.cloud` package had the
+>   same defect (`.sync` / `.backup`) and is fixed.
+> - `psutil` is declared in `requirements.txt` but not in
+>   `pyproject.toml`, so after a plain `pip install .` the
+>   `printcad` entry point fails with `ModuleNotFoundError: No
+>   module named 'psutil'`. The install steps above (which use
+>   `requirements.txt`) are unaffected.
 > - Some modules in `src/core/` fail to import in environments where
 >   the heavier declared packages are not installed (for example
 >   `torch` and `numba`, which are declared but are not part of a

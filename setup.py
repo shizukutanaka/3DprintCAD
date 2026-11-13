@@ -15,23 +15,10 @@ setup(
     long_description_content_type="text/markdown",
     packages=find_packages(include=["src", "src.*"]),
     python_requires=">=3.8",
-    install_requires=[
-        "numpy>=1.21.0,<2.0.0",
-        "trimesh>=3.10.0,<4.0.0",
-    ],
-    extras_require={
-        "dev": [
-            "pytest>=7.0.0,<8.0.0",
-            "pytest-cov>=4.0.0,<5.0.0",
-            "mypy>=1.0.0,<2.0.0",
-            "black>=22.0.0,<24.0.0",
-            "flake8>=5.0.0,<7.0.0",
-        ],
-        "full": [
-            "scipy>=1.7.0,<2.0.0",
-            "networkx>=2.6.0,<4.0.0",
-        ],
-    },
+    # Dependency declarations live in pyproject.toml ([project] and
+    # [project.optional-dependencies]) as the single source of truth.
+    # This file intentionally declares none: setuptools merges the two
+    # and stale duplicates here contradicted pyproject.toml.
     entry_points={
         "console_scripts": [
             "printcad=src.cli_main:main",

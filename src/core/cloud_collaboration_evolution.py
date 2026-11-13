@@ -132,21 +132,6 @@ class DesignVersion:
     approved_at: Optional[datetime] = None
 
 
-class EvolvedCollaborationManager:
-    """Advanced collaboration manager for seamless team design."""
-
-    def __init__(self):
-        self.designs: Dict[str, CollaborativeDesign] = {}
-        self.sessions: Dict[str, CollaborationSession] = {}
-        self.event_queues: Dict[str, queue.Queue] = {}
-        self.action_history: Dict[str, List[DesignActionEvent]] = {}
-        self.version_history: Dict[str, List[DesignVersion]] = {}
-        self.comments: Dict[str, List[Comment]] = {}
-
-        # Start background cleanup
-        self._start_cleanup_thread()
-
-
 class RealTimeSyncManager:
     """Manages real-time synchronization for collaborative design."""
 
@@ -924,10 +909,6 @@ class RemotePrintController:
         return resolution
 
 
-# Global instance
-evolved_collaboration_manager = EvolvedCollaborationManager()
-
-
 class RealTimeSyncManager:
     """Manages real-time synchronization for collaborative design."""
 
@@ -1052,16 +1033,3 @@ class RemotePrintController:
             time.sleep(5)  # Update every 5 seconds
 
 
-def create_collaborative_design(name: str, owner_id: str, description: Optional[str] = None) -> CollaborativeDesign:
-    """Convenience function to create a collaborative design."""
-    return evolved_collaboration_manager.create_collaborative_design(name, owner_id, description)
-
-
-def invite_to_design(design_id: str, inviter_id: str, collaborator_id: str, role: CollaborationRole) -> bool:
-    """Convenience function to invite a collaborator."""
-    return evolved_collaboration_manager.invite_collaborator(design_id, inviter_id, collaborator_id, role)
-
-
-def start_collaboration_session(design_id: str, user_id: str) -> Optional[CollaborationSession]:
-    """Convenience function to start a collaboration session."""
-    return evolved_collaboration_manager.start_collaboration_session(design_id, user_id)

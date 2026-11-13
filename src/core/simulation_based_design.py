@@ -150,166 +150,7 @@ class SimulationBasedDesigner:
     """Simulation-based design assistance with FEA integration."""
 
     def __init__(self):
-        self.class AdvancedThermalAnalyzer:
-    """Advanced thermal analysis for 3D printed parts."""
-
-    def __init__(self):
         self.logger = logging.getLogger(__name__)
-
-    def perform_thermal_analysis(self, mesh: trimesh.Trimesh, material: MaterialProperties,
-                                boundary_conditions: Dict[str, Any]) -> Dict[str, Any]:
-        """Perform advanced thermal analysis."""
-        # Simplified thermal analysis for demonstration
-        analysis_result = {
-            'max_temperature': 0.0,
-            'min_temperature': 0.0,
-            'temperature_distribution': None,
-            'heat_flux': None,
-            'thermal_stress': None,
-            'recommendations': []
-        }
-
-        # Calculate temperature distribution
-        vertices = mesh.vertices
-        temperature_field = self._calculate_temperature_field(vertices, material, boundary_conditions)
-        analysis_result['temperature_distribution'] = temperature_field
-
-        # Calculate thermal stress if material properties allow
-        if material.youngs_modulus and material.thermal_expansion:
-            thermal_stress = self._calculate_thermal_stress(temperature_field, material)
-            analysis_result['thermal_stress'] = thermal_stress
-
-        # Generate recommendations
-        max_temp = np.max(temperature_field)
-        min_temp = np.min(temperature_field)
-
-        if max_temp > 100:  # Arbitrary threshold
-            analysis_result['recommendations'].append("Consider better cooling for high-temperature areas")
-
-        analysis_result['max_temperature'] = max_temp
-        analysis_result['min_temperature'] = min_temp
-
-        return analysis_result
-
-    def _calculate_temperature_field(self, vertices: np.ndarray, material: MaterialProperties,
-                                   boundary_conditions: Dict[str, Any]) -> np.ndarray:
-        """Calculate temperature distribution across mesh."""
-        # Simplified temperature calculation
-        # In practice, would solve heat equation using FEA
-        base_temp = boundary_conditions.get('ambient_temperature', 25.0)
-        heat_source = boundary_conditions.get('heat_source_power', 0.0)
-
-        # Simple linear temperature gradient based on distance from center
-        center = np.mean(vertices, axis=0)
-        distances = np.linalg.norm(vertices - center, axis=1)
-
-        # Normalize distances
-        max_distance = np.max(distances) if np.max(distances) > 0 else 1.0
-        normalized_distances = distances / max_distance
-
-        # Calculate temperature based on heat source and distance
-        temperature_increase = heat_source * (1 - normalized_distances) * 10  # Arbitrary scaling
-        temperatures = base_temp + temperature_increase
-
-        return temperatures
-
-    def _calculate_thermal_stress(self, temperature_field: np.ndarray, material: MaterialProperties) -> np.ndarray:
-        """Calculate thermal stress due to temperature variations."""
-        # Simplified thermal stress calculation
-        # In practice, would use proper thermoelasticity equations
-
-        delta_t = temperature_field - np.mean(temperature_field)
-        thermal_strain = material.thermal_expansion * delta_t
-
-        # Hooke's law for thermal stress
-        thermal_stress = material.youngs_modulus * thermal_strain / (1 - material.poisson_ratio)
-
-        return thermal_stress
-
-
-class AdvancedStressAnalyzer:
-    """Advanced stress analysis for complex loading conditions."""
-
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
-
-    def perform_stress_analysis(self, mesh: trimesh.Trimesh, material: MaterialProperties,
-                               loads: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Perform advanced stress analysis."""
-        analysis_result = {
-            'von_mises_stress': None,
-            'principal_stresses': None,
-            'max_stress': 0.0,
-            'safety_factor': 0.0,
-            'critical_areas': [],
-            'recommendations': []
-        }
-
-        # Calculate stress distribution
-        stress_field = self._calculate_stress_field(mesh, material, loads)
-        analysis_result['von_mises_stress'] = stress_field
-
-        # Find critical areas
-        max_stress = np.max(stress_field)
-        critical_threshold = max_stress * 0.8  # 80% of max stress
-
-        # Identify vertices with high stress
-        critical_vertices = np.where(stress_field > critical_threshold)[0]
-        analysis_result['critical_areas'] = critical_vertices.tolist()
-
-        # Calculate safety factor
-        if material.yield_strength:
-            safety_factor = material.yield_strength / max_stress
-            analysis_result['safety_factor'] = safety_factor
-
-            if safety_factor < 1.5:
-                analysis_result['recommendations'].append("Consider redesign for better stress distribution")
-            elif safety_factor < 2.0:
-                analysis_result['recommendations'].append("Monitor stress levels during use")
-
-        analysis_result['max_stress'] = max_stress
-
-        return analysis_result
-
-    def _calculate_stress_field(self, mesh: trimesh.Trimesh, material: MaterialProperties,
-                              loads: List[Dict[str, Any]]) -> np.ndarray:
-        """Calculate stress distribution across mesh."""
-        # Simplified stress calculation
-        # In practice, would use finite element analysis
-
-        vertices = mesh.vertices
-        stress_field = np.zeros(len(vertices))
-
-        for load in loads:
-            load_type = load.get('type', 'force')
-            magnitude = load.get('magnitude', 0.0)
-            direction = load.get('direction', [0, 0, 1])
-            application_point = load.get('point', [0, 0, 0])
-
-            if load_type == 'force':
-                # Calculate stress due to applied force
-                force_vector = np.array(direction) * magnitude
-                distances = np.linalg.norm(vertices - application_point, axis=1)
-
-                # Simple stress distribution (inverse distance)
-                stress_contribution = magnitude / (distances + 1e-6) * 0.1  # Arbitrary scaling
-                stress_field += stress_contribution
-
-        return stress_field
-
-
-def run_advanced_simulation(mesh: trimesh.Trimesh, material: MaterialProperties,
-                          analysis_type: AnalysisType, parameters: Dict[str, Any]) -> Dict[str, Any]:
-    """Run advanced simulation with enhanced analysis capabilities."""
-    if analysis_type == AnalysisType.THERMAL:
-        analyzer = AdvancedThermalAnalyzer()
-        return analyzer.perform_thermal_analysis(mesh, material, parameters)
-    elif analysis_type in [AnalysisType.STATIC, AnalysisType.DYNAMIC]:
-        analyzer = AdvancedStressAnalyzer()
-        return analyzer.perform_stress_analysis(mesh, material, parameters.get('loads', []))
-    else:
-        # Fallback to basic analysis for other types
-        return run_basic_simulation(mesh, material, analysis_type, parameters)
         self.materials = MaterialProperties.common_materials()
 
     def analyze_design(self, mesh: trimesh.Trimesh,
@@ -887,12 +728,174 @@ def run_advanced_simulation(mesh: trimesh.Trimesh, material: MaterialProperties,
                         issue_type="fatigue",
                         severity="high",
                         location=np.array([0, 0, 0]),
-                        description=".0f"
+                        description=".0f",
                         suggested_fix="Reduce stress concentrations or use fatigue-resistant material",
                         quantitative_impact={"fatigue_life_increase": 200.0}
                     ))
 
         return recommendations
+
+
+class AdvancedThermalAnalyzer:
+    """Advanced thermal analysis for 3D printed parts."""
+
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+
+    def perform_thermal_analysis(self, mesh: trimesh.Trimesh, material: MaterialProperties,
+                                boundary_conditions: Dict[str, Any]) -> Dict[str, Any]:
+        """Perform advanced thermal analysis."""
+        # Simplified thermal analysis for demonstration
+        analysis_result = {
+            'max_temperature': 0.0,
+            'min_temperature': 0.0,
+            'temperature_distribution': None,
+            'heat_flux': None,
+            'thermal_stress': None,
+            'recommendations': []
+        }
+
+        # Calculate temperature distribution
+        vertices = mesh.vertices
+        temperature_field = self._calculate_temperature_field(vertices, material, boundary_conditions)
+        analysis_result['temperature_distribution'] = temperature_field
+
+        # Calculate thermal stress if material properties allow
+        if material.youngs_modulus and material.thermal_expansion:
+            thermal_stress = self._calculate_thermal_stress(temperature_field, material)
+            analysis_result['thermal_stress'] = thermal_stress
+
+        # Generate recommendations
+        max_temp = np.max(temperature_field)
+        min_temp = np.min(temperature_field)
+
+        if max_temp > 100:  # Arbitrary threshold
+            analysis_result['recommendations'].append("Consider better cooling for high-temperature areas")
+
+        analysis_result['max_temperature'] = max_temp
+        analysis_result['min_temperature'] = min_temp
+
+        return analysis_result
+
+    def _calculate_temperature_field(self, vertices: np.ndarray, material: MaterialProperties,
+                                   boundary_conditions: Dict[str, Any]) -> np.ndarray:
+        """Calculate temperature distribution across mesh."""
+        # Simplified temperature calculation
+        # In practice, would solve heat equation using FEA
+        base_temp = boundary_conditions.get('ambient_temperature', 25.0)
+        heat_source = boundary_conditions.get('heat_source_power', 0.0)
+
+        # Simple linear temperature gradient based on distance from center
+        center = np.mean(vertices, axis=0)
+        distances = np.linalg.norm(vertices - center, axis=1)
+
+        # Normalize distances
+        max_distance = np.max(distances) if np.max(distances) > 0 else 1.0
+        normalized_distances = distances / max_distance
+
+        # Calculate temperature based on heat source and distance
+        temperature_increase = heat_source * (1 - normalized_distances) * 10  # Arbitrary scaling
+        temperatures = base_temp + temperature_increase
+
+        return temperatures
+
+    def _calculate_thermal_stress(self, temperature_field: np.ndarray, material: MaterialProperties) -> np.ndarray:
+        """Calculate thermal stress due to temperature variations."""
+        # Simplified thermal stress calculation
+        # In practice, would use proper thermoelasticity equations
+
+        delta_t = temperature_field - np.mean(temperature_field)
+        thermal_strain = material.thermal_expansion * delta_t
+
+        # Hooke's law for thermal stress
+        thermal_stress = material.youngs_modulus * thermal_strain / (1 - material.poisson_ratio)
+
+        return thermal_stress
+
+
+class AdvancedStressAnalyzer:
+    """Advanced stress analysis for complex loading conditions."""
+
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+
+    def perform_stress_analysis(self, mesh: trimesh.Trimesh, material: MaterialProperties,
+                               loads: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Perform advanced stress analysis."""
+        analysis_result = {
+            'von_mises_stress': None,
+            'principal_stresses': None,
+            'max_stress': 0.0,
+            'safety_factor': 0.0,
+            'critical_areas': [],
+            'recommendations': []
+        }
+
+        # Calculate stress distribution
+        stress_field = self._calculate_stress_field(mesh, material, loads)
+        analysis_result['von_mises_stress'] = stress_field
+
+        # Find critical areas
+        max_stress = np.max(stress_field)
+        critical_threshold = max_stress * 0.8  # 80% of max stress
+
+        # Identify vertices with high stress
+        critical_vertices = np.where(stress_field > critical_threshold)[0]
+        analysis_result['critical_areas'] = critical_vertices.tolist()
+
+        # Calculate safety factor
+        if material.yield_strength:
+            safety_factor = material.yield_strength / max_stress
+            analysis_result['safety_factor'] = safety_factor
+
+            if safety_factor < 1.5:
+                analysis_result['recommendations'].append("Consider redesign for better stress distribution")
+            elif safety_factor < 2.0:
+                analysis_result['recommendations'].append("Monitor stress levels during use")
+
+        analysis_result['max_stress'] = max_stress
+
+        return analysis_result
+
+    def _calculate_stress_field(self, mesh: trimesh.Trimesh, material: MaterialProperties,
+                              loads: List[Dict[str, Any]]) -> np.ndarray:
+        """Calculate stress distribution across mesh."""
+        # Simplified stress calculation
+        # In practice, would use finite element analysis
+
+        vertices = mesh.vertices
+        stress_field = np.zeros(len(vertices))
+
+        for load in loads:
+            load_type = load.get('type', 'force')
+            magnitude = load.get('magnitude', 0.0)
+            direction = load.get('direction', [0, 0, 1])
+            application_point = load.get('point', [0, 0, 0])
+
+            if load_type == 'force':
+                # Calculate stress due to applied force
+                force_vector = np.array(direction) * magnitude
+                distances = np.linalg.norm(vertices - application_point, axis=1)
+
+                # Simple stress distribution (inverse distance)
+                stress_contribution = magnitude / (distances + 1e-6) * 0.1  # Arbitrary scaling
+                stress_field += stress_contribution
+
+        return stress_field
+
+
+def run_advanced_simulation(mesh: trimesh.Trimesh, material: MaterialProperties,
+                          analysis_type: AnalysisType, parameters: Dict[str, Any]) -> Dict[str, Any]:
+    """Run advanced simulation with enhanced analysis capabilities."""
+    if analysis_type == AnalysisType.THERMAL:
+        analyzer = AdvancedThermalAnalyzer()
+        return analyzer.perform_thermal_analysis(mesh, material, parameters)
+    elif analysis_type in [AnalysisType.STATIC, AnalysisType.DYNAMIC]:
+        analyzer = AdvancedStressAnalyzer()
+        return analyzer.perform_stress_analysis(mesh, material, parameters.get('loads', []))
+    else:
+        # Fallback to basic analysis for other types
+        return run_basic_simulation(mesh, material, analysis_type, parameters)
 
 
 # Global instance

@@ -13,8 +13,7 @@ setup(
     description="3D Print CAD Assistant - Automated geometry validation and print preparation for 3D models",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    packages=find_packages(where="src"),
-    package_dir={"": "src"},
+    packages=find_packages(include=["src", "src.*"]),
     python_requires=">=3.8",
     install_requires=[
         "numpy>=1.21.0,<2.0.0",
@@ -35,7 +34,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "printcad=src.cli:main",
+            "printcad=src.cli_main:main",
         ],
     },
     classifiers=[

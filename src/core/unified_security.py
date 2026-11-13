@@ -169,6 +169,7 @@ class UnifiedSecurityManager(SecurityManagerBase):
                 # レベルに応じた追加コンポーネント
                 if self.config['enable_quantum_resistance']:
                     # 量子耐性暗号の初期化はcrypto_manager内で処理
+                    pass
 
                 if self.config['enable_blockchain']:
                     self.blockchain_security = BlockchainSecurityManager()

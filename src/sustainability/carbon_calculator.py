@@ -1,10 +1,14 @@
 """Carbon footprint calculator for sustainable 3D printing operations."""
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime, timedelta
 import json
+import logging
 import math
+
+import numpy as np
+import trimesh
 
 
 class EnergySource(Enum):
@@ -1232,6 +1236,14 @@ def calculate_comprehensive_sustainability(mesh: trimesh.Trimesh, material: str,
         optimized_lca = lca_result
 
     return {
+        'original_lca': lca_result,
+        'optimized_lca': optimized_lca,
+        'design_optimizations': optimization_result if lca_result['total_carbon_footprint'] > 5.0 else {},
+        'sustainability_score': optimized_lca['environmental_impact_score'],
+        'recommendations': optimized_lca['recommendations']
+    }
+
+
 class SustainableMaterialManager:
     """Manages sustainable materials and multi-material printing optimization."""
 
@@ -2513,6 +2525,11 @@ class AdvancedMultiMaterialOptimizer:
                 validation['suggestions'].append(
                     "Consider adjusting requirements or exploring additional materials"
                 )
+
+        except Exception as e:
+            self.logger.error(f"Optimization result validation failed: {e}")
+            validation['valid'] = False
+            validation['errors'].append(str(e))
 
         return validation
 

@@ -953,6 +953,10 @@ class CADBestPractices:
 
             return optimized
 
+        except Exception as e:
+            self.logger.warning(f"Analysis best practices failed: {e}")
+            return mesh
+
     def optimize_for_game_development(self, mesh: trimesh.Trimesh, platform: str = "mobile") -> trimesh.Trimesh:
         """Optimize mesh specifically for game development."""
 
@@ -1590,6 +1594,9 @@ class PerformanceOptimizer:
             else:
                 # Estimate based on surface area
                 return mesh.area * 0.1  # Rough estimate
+
+        except Exception:
+            return 0.0
 
 # Global instances
 advanced_mesh_optimizer = AdvancedMeshOptimizer()

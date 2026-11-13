@@ -1364,6 +1364,72 @@ class MLSupportModel:
 
             return max(efficiency, 0.3)  # Minimum 30% efficiency
 
+        except Exception as e:
+            self.logger.warning(f"Support efficiency calculation failed: {e}")
+            return 0.5
+
+    def _generate_support_recommendations(self, geometry_analysis: Dict[str, Any],
+                                        print_settings: Dict[str, Any],
+                                        prediction: Dict[str, Any]) -> List[str]:
+        """Generate specific recommendations for support settings."""
+        recommendations = []
+
+        try:
+            overhangs = geometry_analysis.get('overhangs', [])
+            critical_angles = geometry_analysis.get('critical_angles', [])
+
+            if critical_angles:
+                max_critical = max(critical_angles)
+                if max_critical > 70:
+                    recommendations.append(
+                        f"Use dense supports for overhangs >{max_critical:.0f}°"
+                    )
+
+            if len(overhangs) > 10:
+                recommendations.append(
+                    "Consider using tree supports for better material efficiency"
+                )
+
+            material = print_settings.get('material', 'PLA')
+            if material == 'PLA':
+                recommendations.append(
+                    "PLA supports are easy to remove - use standard settings"
+                )
+            elif material == 'ABS':
+                recommendations.append(
+                    "ABS supports may need higher interface layers for stability"
+                )
+
+        except Exception as e:
+            self.logger.warning(f"Recommendation generation failed: {e}")
+
+        return recommendations
+
+    def _calculate_quality_score(self, geometry_analysis: Dict[str, Any],
+                               prediction: Dict[str, Any]) -> float:
+        """Calculate predicted print quality score after optimization."""
+        try:
+            # Base score
+            score = 0.8
+
+            # Penalize for many overhangs
+            overhang_count = len(geometry_analysis.get('overhangs', []))
+            if overhang_count > 20:
+                score -= 0.1
+            elif overhang_count > 10:
+                score -= 0.05
+
+            # Bonus for optimized settings
+            if prediction.get('density') == 'low' and overhang_count < 5:
+                score += 0.1
+
+            return max(0.0, min(score, 1.0))
+
+        except Exception as e:
+            self.logger.warning(f"Quality score calculation failed: {e}")
+            return 0.5
+
+
 class RealTimePrintOptimizer:
     """AI-powered real-time print optimization and predictive modeling."""
 
@@ -1607,61 +1673,6 @@ class MLPrintOptimizer:
             self.logger.warning(f"Issue prediction failed: {e}")
 
         return predictions
-
-    def _generate_support_recommendations(self, geometry_analysis: Dict[str, Any],
-                                        print_settings: Dict[str, Any],
-                                        prediction: Dict[str, Any]) -> List[str]:
-        """Generate specific recommendations for support settings."""
-        recommendations = []
-
-        try:
-            overhangs = geometry_analysis.get('overhangs', [])
-            critical_angles = geometry_analysis.get('critical_angles', [])
-
-            if critical_angles:
-                max_critical = max(critical_angles)
-                if max_critical > 70:
-                    recommendations.append(
-                        f"Use dense supports for overhangs >{max_critical:.0f}°"
-                    )
-
-            if len(overhangs) > 10:
-                recommendations.append(
-                    "Consider using tree supports for better material efficiency"
-                )
-
-            material = print_settings.get('material', 'PLA')
-            if material == 'PLA':
-                recommendations.append(
-                    "PLA supports are easy to remove - use standard settings"
-                )
-            elif material == 'ABS':
-                recommendations.append(
-                    "ABS supports may need higher interface layers for stability"
-                )
-
-        except Exception as e:
-            self.logger.warning(f"Recommendation generation failed: {e}")
-
-        return recommendations
-
-    def _calculate_quality_score(self, geometry_analysis: Dict[str, Any],
-                               prediction: Dict[str, Any]) -> float:
-        """Calculate predicted print quality score after optimization."""
-        try:
-            # Base score
-            score = 0.8
-
-            # Penalize for many overhangs
-            overhang_count = len(geometry_analysis.get('overhangs', []))
-            if overhang_count > 20:
-                score -= 0.1
-            elif overhang_count > 10:
-                score -= 0.05
-
-            # Bonus for optimized settings
-            if prediction.get('density') == 'low' and overhang_count < 5:
-                score += 0.1
 
 class RealTimePrintOptimizer:
     """AI-powered real-time print optimization and predictive modeling."""

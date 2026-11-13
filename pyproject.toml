@@ -76,10 +76,9 @@ docs = [
 ]
 
 [project.scripts]
-printcad = "src.cli:main"
+printcad = "src.cli_main:main"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
 packages = ["src", "src.core", "src.core.analysis", "src.core.recommendation", "src.adapters"]
 
 [tool.setuptools.package-data]

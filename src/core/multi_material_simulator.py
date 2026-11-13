@@ -547,9 +547,7 @@ class MultiMaterialSimulator:
         # 推奨事項
         recommendations = simulation_results.get("recommendations", [])
         if recommendations:
-            report += "
-## 推奨事項
-"
+            report += "\n## 推奨事項\n"
             for rec in recommendations:
                 report += f"- {rec}\n"
 

@@ -281,13 +281,18 @@ def create_app(config_name='development'):
 
     @app.route('/api/language')
     def get_language():
-    # Add i18n template filters
-    @app.template_filter('t')
+        return jsonify({
+            'success': True,
+            'language': i18n_manager.get_language().value
+        })
+
+    # Add i18n template helpers (templates call them as functions: {{ t('...') }}, {{ lang() }})
+    @app.template_global('t')
     def translate_filter(key, **kwargs):
         """Translate key with current language."""
         return i18n_manager.t(key, **kwargs)
 
-    @app.template_filter('lang')
+    @app.template_global('lang')
     def current_language():
         """Get current language."""
         return i18n_manager.get_language().value

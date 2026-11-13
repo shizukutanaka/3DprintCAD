@@ -800,7 +800,7 @@ class CADSafeProcessor:
         MAX_TIME = 24 * 60 * 60  # 24 hours in seconds
 
         if print_time > MAX_TIME:
-            check_result["warnings"].append(f"Long print time: {print_time/3600".1f"} hours")
+            check_result["warnings"].append(f"Long print time: {print_time/3600:.1f} hours")
 
         return check_result
 

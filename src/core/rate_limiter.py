@@ -235,13 +235,23 @@ class RateLimiter:
 rate_limiter = RateLimiter()
 
 
-def rate_limit(endpoint_override: Optional[str] = None):
+def rate_limit(endpoint_override: Optional[str] = None,
+               requests: Optional[int] = None,
+               window: Optional[int] = None):
     """
     Decorator for rate limiting Flask routes.
 
     Args:
         endpoint_override: Optional endpoint name override
+        requests: Optional request allowance; when given together with
+            ``window``, a rule for ``endpoint_override`` is registered
+            with these values (e.g. ``rate_limit('ai_requests', 10, 60)``)
+        window: Optional time window in seconds (see ``requests``)
     """
+    if endpoint_override is not None and requests is not None and window is not None:
+        rate_limiter.endpoint_rules[endpoint_override] = RateLimitRule(
+            requests=requests, window=window
+        )
     def decorator(f):
         @wraps(f)
         def wrapped(*args, **kwargs):

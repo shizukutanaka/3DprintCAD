@@ -150,14 +150,36 @@ python -m src.cli_main --help
 >   optional integrations (translation, speech, GPU) remain in the
 >   `full` extra. `setup.py` also claimed Python >=3.8 while
 >   `pyproject.toml` requires >=3.9; it now agrees.
-> - The Docker builds do not work, independently of the above:
->   both Dockerfiles `COPY` a `requirements_web.txt` that does not
->   exist in the repository, and they install dependencies before
->   the source tree is copied, so they cannot consume the
->   project-reference form of `requirements.txt` either. The same
->   missing file is referenced by `production-deploy.yml` and by
->   `CONTRIBUTING.md` (there as `requirements_dev.txt`). Repairing
->   the container/deployment path is a separate follow-up.
+> - The Docker / deployment path referenced files that do not
+>   exist, and has been reduced to the one chain that is real:
+>   both Dockerfiles `COPY`ed a `requirements_web.txt` that is not
+>   in the repository, and installed dependencies before copying
+>   the source tree, so neither could consume the
+>   project-reference form of `requirements.txt`. The `Dockerfile`
+>   now installs the project from `pyproject.toml` after copying
+>   the source (`.dockerignore` re-includes `README.md`, which
+>   the build needs). The parallel "production" chain was not
+>   repairable in the same way and was removed: `Dockerfile.
+>   production` (its `CMD` ran `python -m src.web.app`, which has
+>   no `__main__` entry point and exits at once), `docker-compose.
+>   production.yml` (it mounted `./nginx/` and `./monitoring/`
+>   configuration trees that do not exist, pulled a `3dprintcad/
+>   backup` image that nothing in this repository builds, and
+>   wired PostgreSQL/Redis services that the declared
+>   dependencies provide no driver for), and `.github/workflows/
+>   production-deploy.yml` (it triggered on a `main` branch this
+>   repository does not have, and referenced `requirements_web.
+>   txt`, `docker-compose.test.yml`, Helm charts under `helm/`,
+>   seven scripts under `scripts/`, and `tests/integration`,
+>   `tests/api`, `tests/load` and `tests/smoke` — none of which
+>   exist). `CONTRIBUTING.md` also pointed at a nonexistent
+>   `requirements_dev.txt`; the dev tools are part of the
+>   `requirements.txt` install. What remains — `Dockerfile`,
+>   `docker-compose.yml` and the root `nginx.conf` — is one
+>   consistent local-validation stack. `docs/PRODUCTION_
+>   DEPLOYMENT.md` still describes a bare-metal PostgreSQL/Redis
+>   production topology; aligning or retiring that guide is a
+>   separate follow-up.
 > - One fatigue-recommendation description string in
 >   `src/core/simulation_based_design.py` is garbled (`.0f`); the
 >   original text is unrecoverable.
@@ -296,7 +318,7 @@ logging:
 docker compose up --build
 ```
 
-`docker-compose.yml` starts the web app, nginx, and Redis with development defaults (there is no Postgres service in the compose file). For hardened settings, use `docker-compose.production.yml` and supply an `.env` file for secrets.
+`docker-compose.yml` starts the web app, nginx, and Redis with development defaults (there is no Postgres service in the compose file), reading secrets such as `SECRET_KEY` from the environment or an `.env` file. It is the only compose stack in the repository: the former `docker-compose.production.yml` described a separate production topology (PostgreSQL, Prometheus/Grafana, a backup image) that referenced configuration files and images that do not exist here, and was removed rather than left as instructions that cannot be followed.
 
 ### Kubernetes
 
@@ -432,15 +454,16 @@ See [SECURITY_HARDENING.md](docs/SECURITY_HARDENING.md) for complete security do
 ### Quick Deploy with Docker
 
 ```bash
-# Build production image
-docker compose -f docker-compose.production.yml build
-
-# Start services
-docker compose -f docker-compose.production.yml up -d
+# Build the image and start the services
+docker compose up --build -d
 
 # Check health
-curl "$PRODUCTION_BASE_URL/health"
+curl http://localhost:5000/api/health
 ```
+
+There is no separate production compose stack; see
+[Deployment options](#deployment-options) above for the one
+supported Docker setup.
 
 ### Kubernetes Deployment
 

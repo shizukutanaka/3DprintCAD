@@ -39,6 +39,9 @@ logs/
 # Documentation
 docs/
 *.md
+# ...except the readme: pyproject.toml declares it as the package
+# readme, so the Docker build cannot install the project without it.
+!README.md
 
 # Git
 .git/

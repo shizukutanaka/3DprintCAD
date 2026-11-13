@@ -11,13 +11,17 @@ RUN apt-get update && apt-get install -y \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy requirements files
-COPY requirements.txt requirements_web.txt /tmp/
-
-# Install Python dependencies
+# Copy the source tree and install the project into the venv.
+# Dependency declarations live in pyproject.toml (the single source
+# of truth) and requirements.txt only references the project, so the
+# former "copy the requirements files first, install them, then copy
+# the source" layering cannot work: the install needs the source
+# tree (and README.md, which pyproject.toml names as the readme)
+# to be present.
+WORKDIR /build
+COPY . .
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r /tmp/requirements.txt && \
-    pip install --no-cache-dir -r /tmp/requirements_web.txt
+    pip install --no-cache-dir .
 
 # Production stage
 FROM python:3.11-slim

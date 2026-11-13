@@ -65,9 +65,9 @@ python -m src.cli_main model.stl --output report.json --summary
 python -m src.cli_main --pattern "models/*.stl" --auto-summary
 ```
 
-> **Note:** the CLI does not start in the current code — see
-> "Installation (local CLI)" below for the known issues that must be
-> fixed in code first.
+> **Note:** invoke the CLI as `python -m src.cli_main`. The
+> `printcad` console script installed by `pip install -e .` does
+> not work yet — see "Installation (local CLI)" below.
 
 **Web Interface:**
 ```bash
@@ -113,19 +113,22 @@ Confirm the command works:
 python -m src.cli_main --help
 ```
 
-> **Known issues — the CLI currently does not start at all.** Two code
-> defects (not documentation problems) block every CLI entry point:
+> **Known issue — the `printcad` console script does not work yet.**
+> The CLI itself works when invoked as a module
+> (`python -m src.cli_main ...`): single-file, batch, pattern,
+> benchmark, and repair runs all complete successfully. However, the
+> `printcad` entry point declared in `pyproject.toml` and `setup.py`
+> still points at `src.cli:main`, and `src/cli.py` does not exist in
+> this repository, so the `printcad` command fails immediately with
+> `ModuleNotFoundError`. Use the module form until the entry point is
+> fixed in code.
 >
-> 1. The `printcad` console script declared in `pyproject.toml` and
->    `setup.py` points at `src.cli:main`, but `src/cli.py` does not
->    exist in this repository, so `printcad --help` fails immediately.
-> 2. The module entry point above fails as well: `src/cli_main.py`
->    currently has a syntax error (an unmatched `)` around line 3638),
->    so the module cannot even be imported.
->
-> Until both are fixed in code, the CLI is unusable; the Web
-> application (`python run_server.py`, see below) is the working
-> entry point.
+> Separately, several modules outside the CLI code path still
+> contain syntax errors and cannot be imported (parts of `src/core/`
+> and `src/sustainability/`, among others). This also affects the
+> Web application: `src/web/app.py` has an indentation error, so
+> `python run_server.py` currently fails at startup as well. At this
+> time the module-form CLI above is the working entry point.
 
 ---
 

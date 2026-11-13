@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, asdict, field
+from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -12,13 +13,19 @@ import trimesh
 from ..analysis.mesh_validator import MeshValidationMetrics, MeshValidationResult
 from ..materials import (
     MaterialDatabase, get_material_database, MaterialSelector, SelectionRequirements,
-    MaterialType, PrinterType, MaterialPreset, create_requirements_from_application
+    PrinterType, MaterialPreset, create_requirements_from_application
 )
 from ..materials.presets import MaterialPresetManager
 from ..logging import get_logger
-    SLA = "sla"
-    SLS = "sls"
-    MULTI_MATERIAL = "multi_material"
+
+
+class MaterialType(Enum):
+    """Specific printable materials used by the recommendation presets."""
+
+    PLA = "pla"
+    ABS = "abs"
+    PETG = "petg"
+    RESIN = "resin"
 
 
 @dataclass(frozen=True)
@@ -224,8 +231,11 @@ class RecommendationEngine:
 
         metrics = validation_result.metrics
 
-        # High detail requirements -> Resin
-        if (metrics.min_feature_size_mm < 0.2 or
+        # High detail requirements -> Resin. MeshValidationMetrics does not
+        # carry a measured feature size; fall back to the minimum edge
+        # length unless a feature size was set explicitly.
+        min_feature_size_mm = getattr(metrics, "min_feature_size_mm", metrics.min_edge_length_mm)
+        if (min_feature_size_mm < 0.2 or
             metrics.surface_roughness_score < 0.1):
             return "resin_standard"
 
@@ -288,6 +298,10 @@ class RecommendationEngine:
 
         # Calculate time based on print speed
         speed_mm_per_min = material_preset.print_speed
+        if speed_mm_per_min <= 0:
+            # Presets without an extrusion speed (e.g. resin/SLA, whose
+            # print_speed is 0) cannot use the area/speed model.
+            return 1.0
         speed_mm2_per_min = speed_mm_per_min * 0.4  # Line width approximation
 
         layer_time_min = print_area_per_layer / speed_mm2_per_min
@@ -350,7 +364,7 @@ class RecommendationEngine:
         })
 
         # Calculate layer height
-        if validation_result.metrics and validation_result.metrics.min_feature_size_mm < 0.3:
+        if validation_result.metrics and getattr(validation_result.metrics, "min_feature_size_mm", validation_result.metrics.min_edge_length_mm) < 0.3:
             layer_height = material_preset.layer_height_min
             rationales.append({
                 "code": "layer_height",

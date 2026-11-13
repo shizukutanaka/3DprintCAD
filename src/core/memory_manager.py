@@ -13,6 +13,9 @@ from pathlib import Path
 import time
 from collections import defaultdict
 
+logger = logging.getLogger(__name__)
+
+
 class ArrayPool:
     """Memory-efficient array pool for numpy arrays."""
 
@@ -515,13 +518,17 @@ class MemoryMonitor:
         # Estimate mesh cache usage (simplified)
         mesh_cache_mb = getattr(self, '_mesh_cache_size_mb', 0.0)
 
+        # Array pool usage
+        array_pool_mb = getattr(self, '_array_pool_size_mb', 0.0)
+
         return MemoryStats(
             total_mb=system_mem.total / (1024 * 1024),
             available_mb=system_mem.available / (1024 * 1024),
             used_mb=system_mem.used / (1024 * 1024),
             used_percent=system_mem.percent,
             process_mb=process_mem.rss / (1024 * 1024),
-            mesh_cache_mb=mesh_cache_mb
+            mesh_cache_mb=mesh_cache_mb,
+            array_pool_mb=array_pool_mb
         )
 
     def start_monitoring(self, interval: float = 5.0,

@@ -5,7 +5,9 @@ from .models import (
     PrintSettings, CompatibilityInfo, MaterialCategory
 )
 from .presets import MaterialPresetManager
-from .selection import MaterialSelector
+from .selection import (
+    MaterialSelector, SelectionRequirements, create_requirements_from_application
+)
 
 __all__ = [
     'MaterialDatabase',
@@ -18,5 +20,7 @@ __all__ = [
     'CompatibilityInfo',
     'MaterialCategory',
     'MaterialPresetManager',
-    'MaterialSelector'
+    'MaterialSelector',
+    'SelectionRequirements',
+    'create_requirements_from_application'
 ]

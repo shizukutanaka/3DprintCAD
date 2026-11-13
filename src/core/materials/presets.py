@@ -343,7 +343,6 @@ class MaterialPresetManager:
                 cost_per_kg=120.0,
                 description="High-performance engineering thermoplastic",
                 applications=["Gears", "Bearings", "Automotive components"],
-                category=MaterialCategory.HIGH_PERFORMANCE,
                 validated=True
             )
         ]

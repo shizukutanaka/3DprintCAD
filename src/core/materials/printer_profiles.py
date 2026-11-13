@@ -143,13 +143,15 @@ class PrinterProfile:
     brand: PrinterBrand
     model: str
     technology: PrinterTechnology
-    firmware: str = "Marlin"
 
     # Hardware specs
     build_volume: BuildVolume
     extruder: ExtruderConfig
     bed: BedConfig
     motion: MotionSystem
+
+    # Firmware (a field with a default must follow the required fields above)
+    firmware: str = "Marlin"
 
     # Features
     features: Dict[str, bool] = field(default_factory=dict)

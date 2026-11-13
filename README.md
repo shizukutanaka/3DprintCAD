@@ -119,16 +119,16 @@ python -m src.cli_main --help
 > Web application (`python run_server.py`). A few pre-existing
 > defects remain in modules off those paths:
 >
-> - `src/core/i18n_optimized.py` does not define `get_text`, but
->   18 modules in `src/core/` import it (`multi_material_simulator`
->   and several `advanced_*` / `enhanced_*` modules, among others);
->   those modules still fail at import time.
-> - `src/core/progress.py` uses `@contextmanager` without importing
->   it, so importing that module fails with `NameError`. This also
->   blocks collection of `tests/test_end_to_end_integration.py`.
-> - `src/core/ai_mesh_repair.py` defines `RealTimePrintOptimizer`
->   and `MLPrintOptimizer` twice; the later definitions silently
->   override the earlier ones.
+> - `src/core/cloud_collaboration_evolution.py` still fails to
+>   import: the `EvolvedCollaborationManager` class is a stub whose
+>   `__init__` calls a method that only exists on a different class,
+>   and the module instantiates the manager at import time.
+> - Several optional modules in `src/core/` import third-party
+>   packages that are not declared in `requirements.txt` (pandas,
+>   PyJWT, boto3, sympy, opencv-python, Pillow) and fail to import
+>   without them. `advanced_ecosystem_manager` and
+>   `ecosystem_integration_manager` also rely on `pkg_resources`,
+>   which setuptools 81 and later no longer provide.
 > - One fatigue-recommendation description string in
 >   `src/core/simulation_based_design.py` is garbled (`.0f`); the
 >   original text is unrecoverable.

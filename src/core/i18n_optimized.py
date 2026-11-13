@@ -1555,6 +1555,15 @@ def get_language() -> Language:
     """Get current language."""
     return _i18n.get_language()
 
+def get_text(japanese: str, english: str) -> str:
+    """Return the given text in the current language.
+
+    Callers pass an inline Japanese/English pair of strings; the
+    Japanese text is returned when the current language is Japanese,
+    and the English text otherwise.
+    """
+    return japanese if _i18n.get_language() == Language.JA else english
+
 def get_i18n_manager() -> I18nManager:
     """Get global i18n manager instance."""
     return _i18n

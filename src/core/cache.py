@@ -1,5 +1,5 @@
 """Caching system for performance optimization."""
-from typing import Any, Optional, Dict, Callable
+from typing import Any, Optional, Dict, Callable, List
 from pathlib import Path
 import pickle
 import hashlib

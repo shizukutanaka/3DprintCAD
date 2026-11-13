@@ -9,7 +9,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union, Callable, Type, TypeVar, Awaitable
+from typing import Any, Dict, Generic, List, Optional, Union, Callable, Type, TypeVar, Awaitable
 from pathlib import Path
 import threading
 import weakref

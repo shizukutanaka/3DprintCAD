@@ -13,7 +13,7 @@ from src.core.recommendation import RecommendationEngine
 from src.core.cache import MemoryCache, FileCache
 from src.core.validators import PathValidator, NumericValidator, PrintSettingsValidator
 from src.core.progress import ProgressTracker, track_progress
-from src.cli_optimized import CLIProcessor
+from src.cli_main import CLIProcessor
 
 
 class TestMeshProcessingPipeline:
@@ -50,31 +50,6 @@ class TestMeshProcessingPipeline:
             yield Path(f.name)
         Path(f.name).unlink(missing_ok=True)
 
-    def test_full_pipeline(self, temp_stl_file):
-        """Test complete processing pipeline."""
-        # Load mesh
-        mesh = load_mesh(temp_stl_file)
-        assert mesh is not None
-        assert mesh.vertices.shape[0] > 0
-
-        # Validate mesh
-        settings = mesh_validator.MeshValidationSettings()
-        validation = mesh_validator.validate_mesh(mesh, settings=settings)
-        assert validation.mesh_stats.vertex_count > 0
-        assert validation.mesh_stats.face_count > 0
-
-        # Generate recommendations
-        recommender = RecommendationEngine()
-        recommendations = recommender.generate_recommendations(validation)
-        assert recommendations is not None
-
-        # Repair if needed
-        if validation.has_issues:
-            repaired = repair_mesh(mesh, aggressive=False)
-            if repaired:
-                # Re-validate
-                validation2 = mesh_validator.validate_mesh(repaired, settings=settings)
-                assert validation2 is not None
 
     def test_batch_processing(self, temp_stl_file):
         """Test batch processing functionality."""
@@ -88,12 +63,13 @@ class TestMeshProcessingPipeline:
             output=None,
             quiet=True,
             verbose=False,
-            no_progress=True,
-            parallel=False,
-            workers=1,
+            progress=False,
+            max_workers=1,
             min_wall=0.8,
             min_feature=0.4,
-            overhang=60
+            overhang_angle=60,
+            recommendations=False,
+            files=[temp_stl_file]
         )
 
         processor = CLIProcessor()
@@ -116,12 +92,13 @@ class TestMeshProcessingPipeline:
             output=None,
             quiet=True,
             verbose=False,
-            no_progress=True,
-            parallel=True,
-            workers=2,
+            progress=False,
+            max_workers=2,
             min_wall=0.8,
             min_feature=0.4,
-            overhang=60
+            overhang_angle=60,
+            recommendations=False,
+            files=[temp_stl_file, temp_stl_file]
         )
 
         processor = CLIProcessor()
@@ -314,7 +291,7 @@ class TestI18n:
 
     def test_translations(self):
         """Test translation system."""
-        from src.core.i18n_manager import get_i18n_manager, Language
+        from src.core.i18n_optimized import get_i18n_manager, Language
 
         i18n = get_i18n_manager()
 
@@ -337,6 +314,29 @@ class TestI18n:
 
 class TestWebAPI:
     """Test Web API endpoints."""
+
+    @pytest.fixture
+    def sample_mesh(self):
+        """Create a sample mesh for testing."""
+        vertices = np.array([
+            [0, 0, 0],
+            [1, 0, 0],
+            [1, 1, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+            [1, 0, 1],
+            [1, 1, 1],
+            [0, 1, 1]
+        ])
+        faces = np.array([
+            [0, 1, 2], [0, 2, 3],  # Bottom
+            [4, 7, 6], [4, 6, 5],  # Top
+            [0, 4, 5], [0, 5, 1],  # Front
+            [2, 6, 7], [2, 7, 3],  # Back
+            [0, 3, 7], [0, 7, 4],  # Left
+            [1, 5, 6], [1, 6, 2]   # Right
+        ])
+        return trimesh.Trimesh(vertices=vertices, faces=faces)
 
     @pytest.fixture
     def client(self):

@@ -288,24 +288,37 @@ class SupportGenerator:
             support_vertices.extend(base_vertices)
             support_vertices.extend(top_vertices)
 
-            # Create faces for cylindrical support
+            # Create faces for cylindrical support. Trimesh faces must be
+            # triangles: split each side quad into two triangles and build
+            # each circular cap as a triangle fan. (Previously quads and
+            # octagons were appended as single "faces", producing a ragged
+            # face list that trimesh.Trimesh always rejects, so support
+            # generation failed for every mesh with overhangs.)
             for j in range(segments):
                 next_j = (j + 1) % segments
 
-                # Side faces
-                face1 = [start_idx + j, start_idx + next_j,
-                        start_idx + segments + next_j, start_idx + segments + j]
-                support_faces.append(face1)
+                # Side faces (two triangles per quad, wound outward)
+                support_faces.append(
+                    [start_idx + j, start_idx + next_j,
+                     start_idx + segments + next_j]
+                )
+                support_faces.append(
+                    [start_idx + j, start_idx + segments + next_j,
+                     start_idx + segments + j]
+                )
 
-                # Bottom face
-                if j == 0:
-                    bottom_face = [start_idx + k for k in range(segments)]
-                    support_faces.append(bottom_face)
+            # Bottom cap (triangle fan, wound downward)
+            for k in range(1, segments - 1):
+                support_faces.append(
+                    [start_idx, start_idx + k + 1, start_idx + k]
+                )
 
-                # Top face
-                if j == 0:
-                    top_face = [start_idx + segments + k for k in range(segments)]
-                    support_faces.append(top_face)
+            # Top cap (triangle fan, wound upward)
+            for k in range(1, segments - 1):
+                support_faces.append(
+                    [start_idx + segments, start_idx + segments + k,
+                     start_idx + segments + k + 1]
+                )
 
         return trimesh.Trimesh(vertices=support_vertices, faces=support_faces)
 

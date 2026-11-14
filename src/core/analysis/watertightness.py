@@ -388,6 +388,16 @@ class WatertightnessValidator:
             # For each vertex, find nearest vertices
             distances, indices = kdtree.query(mesh.vertices, k=10)
 
+            # Vertex pairs that share a face (for a triangular mesh, sharing
+            # a face is equivalent to being connected by an edge). Built once
+            # up front: scanning every face for every candidate pair makes
+            # this check O(vertices * faces) and unusable on large meshes.
+            face_pairs = set()
+            for a, b, c in mesh.faces:
+                face_pairs.add((a, b))
+                face_pairs.add((b, c))
+                face_pairs.add((a, c))
+
             # Look for vertices that are close but not connected
             gap_candidates = []
 
@@ -395,11 +405,7 @@ class WatertightnessValidator:
                 for j, (dist, idx) in enumerate(zip(dist_array[1:], idx_array[1:])):  # Skip self
                     if dist < self.gap_threshold and dist > self.tolerance:
                         # Check if vertices are connected by an edge
-                        edge_exists = False
-                        for face in mesh.faces:
-                            if i in face and idx in face:
-                                edge_exists = True
-                                break
+                        edge_exists = (i, idx) in face_pairs or (idx, i) in face_pairs
 
                         if not edge_exists:
                             gap_candidates.append((i, idx, dist))

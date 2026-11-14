@@ -48,7 +48,7 @@ docs:  ## Generate documentation
 
 run:  ## Run validation on example model (requires model.stl)
 	@if [ -f model.stl ]; then \
-		python -m src.cli model.stl; \
+		python -m src.cli_main model.stl; \
 	else \
 		echo "No model.stl found. Please provide a test STL file."; \
 	fi

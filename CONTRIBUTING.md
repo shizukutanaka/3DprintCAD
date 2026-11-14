@@ -60,11 +60,11 @@ python3.11 -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
 # Install dependencies
+# (requirements.txt installs the project together with its dev
+# extra — pytest, pre-commit and the other development tools are
+# already included, so there is no separate dev requirements file)
 pip install --upgrade pip
 pip install -r requirements.txt
-
-# Install development dependencies
-pip install -r requirements_dev.txt
 
 # Install pre-commit hooks
 pre-commit install

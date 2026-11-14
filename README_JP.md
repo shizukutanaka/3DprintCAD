@@ -155,7 +155,7 @@ logging:
 docker compose up --build
 ```
 
-`docker-compose.yml` がアプリ・Postgres・Redis を開発向け設定で起動します。本番用途は `docker-compose.production.yml` と `.env` で機密情報を供給してください。
+`docker-compose.yml` が Web アプリ・nginx・Redis を開発向け設定で起動します（Postgres のサービスは含まれません）。機密情報は環境変数または `.env` ファイルで供給してください。旧 `docker-compose.production.yml` は、存在しない設定ファイルやイメージを参照する別トポロジだったため削除されました。
 
 ### Kubernetes
 

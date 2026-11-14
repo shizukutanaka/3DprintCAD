@@ -411,6 +411,10 @@ class OptimizedMeshLoader:
             extensions.extend(loader.supported_extensions)
         return sorted(set(ext.lower() for ext in extensions))
 
+    def can_load(self, file_path: Union[str, Path]) -> bool:
+        """Check if this loader can handle the file format."""
+        return Path(file_path).suffix.lower() in self._loader_map
+
     def load(self, file_path: Union[str, Path]) -> trimesh.Trimesh:
         """Load mesh from file with automatic format detection."""
         file_path = Path(file_path)

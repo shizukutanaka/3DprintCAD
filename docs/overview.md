@@ -54,11 +54,11 @@ This document introduces the 3D print CAD assistant MVP. It explains how the sof
 
 ## Command-line usage / コマンドライン利用
 ```
-python -m src.cli path/to/model.stl --output report.json
-python -m src.cli path/to/folder --list-files
-python -m src.cli path/to/model.stl --no-progress
-python -m src.cli --list-formats
-python -m src.cli path/to/model.3mf
+python -m src.cli_main path/to/model.stl --output report.json
+python -m src.cli_main path/to/folder --list-files
+python -m src.cli_main path/to/model.stl --no-progress
+python -m src.cli_main --list-formats
+python -m src.cli_main path/to/model.3mf
 ```
 
 The commands above highlight the common workflows. Detailed argument descriptions are maintained centrally in `README.md` to avoid duplication. Refer to `README.md#command-line-usage` for the full option matrix, including threshold tuning (`--min-wall`, `--min-feature`, `--overhang-angle`), sorted file listing with `--list-files`, and quiet automation using `--no-progress`.

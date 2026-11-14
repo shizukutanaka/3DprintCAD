@@ -73,10 +73,10 @@ pre-commit install
 #### CLIツールの実行 / Run CLI Tool
 ```bash
 # ヘルプ表示
-python -m src.cli --help
+python -m src.cli_main --help
 
 # サンプルファイルの検証（model.stlが存在する場合）
-python -m src.cli model.stl
+python -m src.cli_main model.stl
 
 # Webアプリケーションの起動
 python run_server.py

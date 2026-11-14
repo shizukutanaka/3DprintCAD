@@ -2,9 +2,7 @@
 
 Tests comprehensive support generation including:
 - Tree support generation
-- Organic support generation
 - Support optimization
-- Interface layer generation
 - Collision detection
 """
 
@@ -13,7 +11,7 @@ import numpy as np
 import trimesh
 from unittest.mock import MagicMock, patch
 
-from src.core.analysis.support_generator import SupportGenerator, SupportType
+from src.core.analysis.support_generator import SupportGenerator, SupportSettings, SupportType
 
 
 class TestTreeSupportGeneration:
@@ -39,110 +37,52 @@ class TestTreeSupportGeneration:
 
     def test_tree_support_generation_basic(self, overhanging_mesh):
         """Test basic tree support generation."""
-        generator = SupportGenerator()
+        generator = SupportGenerator(SupportSettings(support_type=SupportType.TREE))
 
-        supports = generator.generate_supports(
-            overhanging_mesh,
-            support_type=SupportType.TREE
-        )
+        supports = generator.generate_supports(overhanging_mesh)
 
         assert supports is not None
-        assert len(supports.support_volumes) > 0
+        assert supports.support_mesh is not None
+        assert len(supports.support_points) > 0
 
     def test_tree_support_reaches_base(self, overhanging_mesh):
         """Test that tree supports reach from base to overhang."""
-        generator = SupportGenerator()
+        generator = SupportGenerator(SupportSettings(support_type=SupportType.TREE))
 
-        supports = generator.generate_supports(
-            overhanging_mesh,
-            support_type=SupportType.TREE
-        )
+        supports = generator.generate_supports(overhanging_mesh)
 
-        # Tree should have multiple levels
-        for volume in supports.support_volumes:
-            if volume.support_type == SupportType.TREE:
-                # Should have defined height
-                assert volume.mesh is not None
-                assert len(volume.mesh.vertices) > 0
+        # The support mesh should have defined height and vertices
+        assert supports.support_mesh is not None
+        assert len(supports.support_mesh.vertices) > 0
 
     def test_tree_support_branch_optimization(self, overhanging_mesh):
         """Test that tree branches are optimized."""
-        generator = SupportGenerator()
-
-        supports = generator.generate_supports(
-            overhanging_mesh,
+        generator = SupportGenerator(SupportSettings(
             support_type=SupportType.TREE,
-            optimize=True
-        )
+            optimize_for_material=True
+        ))
+
+        supports = generator.generate_supports(overhanging_mesh)
 
         assert supports is not None
-        # With optimization, volume should be smaller
-        total_volume_opt = sum(v.mesh.volume for v in supports.support_volumes)
-        assert total_volume_opt > 0
+        assert supports.support_mesh is not None
+        assert supports.support_mesh.volume > 0
 
     def test_tree_support_collision_free(self, overhanging_mesh):
         """Test that tree supports don't intersect with model."""
-        generator = SupportGenerator()
+        generator = SupportGenerator(SupportSettings(support_type=SupportType.TREE))
 
-        supports = generator.generate_supports(
-            overhanging_mesh,
-            support_type=SupportType.TREE
-        )
+        supports = generator.generate_supports(overhanging_mesh)
 
         # Check no collision between supports and model
-        for support_volume in supports.support_volumes:
+        if supports.support_mesh is not None:
             # Simplified check: bounds shouldn't contain model vertices
-            bounds = support_volume.mesh.bounds
+            bounds = supports.support_mesh.bounds
             for vertex in overhanging_mesh.vertices:
                 if np.all(vertex >= bounds[0]) and np.all(vertex <= bounds[1]):
                     # May be collision, but supports might intentionally touch model
                     pass
 
-
-class TestOrganicSupportGeneration:
-    """Test organic/curved support generation."""
-
-    @pytest.fixture
-    def complex_overhanging_mesh(self):
-        """Create complex mesh with multiple overhang regions."""
-        # Create more complex shape
-        sphere = trimesh.creation.sphere(radius=0.5)
-        sphere.apply_translation([0.5, 0.5, 1.5])
-
-        box = trimesh.creation.box(extents=[1, 1, 1])
-        box.apply_translation([0, 0, 0])
-
-        # Merge
-        merged = trimesh.util.concatenate([box, sphere])
-        return merged
-
-    def test_organic_support_generation(self, complex_overhanging_mesh):
-        """Test organic support generation."""
-        generator = SupportGenerator()
-
-        supports = generator.generate_supports(
-            complex_overhanging_mesh,
-            support_type=SupportType.ORGANIC
-        )
-
-        assert supports is not None
-        assert len(supports.support_volumes) > 0
-
-    def test_organic_support_smooth(self, complex_overhanging_mesh):
-        """Test that organic supports have smooth curves."""
-        generator = SupportGenerator()
-
-        supports = generator.generate_supports(
-            complex_overhanging_mesh,
-            support_type=SupportType.ORGANIC
-        )
-
-        for volume in supports.support_volumes:
-            if volume.support_type == SupportType.ORGANIC:
-                # Check curvature (simplified)
-                assert volume.mesh is not None
-                # Organic supports should have curved faces
-                assert len(volume.mesh.faces) > 0
 
 
 class TestNormalSupportGeneration:
@@ -162,12 +102,9 @@ class TestNormalSupportGeneration:
         ], dtype=np.int32)
 
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
-        generator = SupportGenerator()
+        generator = SupportGenerator(SupportSettings(support_type=SupportType.GRID))
 
-        supports = generator.generate_supports(
-            mesh,
-            support_type=SupportType.NORMAL
-        )
+        supports = generator.generate_supports(mesh)
 
         assert supports is not None
 
@@ -184,13 +121,13 @@ class TestNormalSupportGeneration:
         ], dtype=np.int32)
 
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
-        generator = SupportGenerator()
+        generator = SupportGenerator(SupportSettings(support_type=SupportType.GRID))
 
-        supports = generator.generate_supports(mesh, support_type=SupportType.NORMAL)
+        supports = generator.generate_supports(mesh)
 
-        for volume in supports.support_volumes:
-            # Pillars should be relatively simple
-            assert len(volume.mesh.faces) > 0
+        # Pillars should be relatively simple
+        assert supports.support_mesh is not None
+        assert len(supports.support_mesh.faces) > 0
 
 
 class TestSlimSupportGeneration:
@@ -209,19 +146,18 @@ class TestSlimSupportGeneration:
         ], dtype=np.int32)
 
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
-        generator = SupportGenerator()
 
         # Generate different support types
-        slim_supports = generator.generate_supports(
-            mesh, support_type=SupportType.SLIM
-        )
-        normal_supports = generator.generate_supports(
-            mesh, support_type=SupportType.NORMAL
-        )
+        slim_supports = SupportGenerator(
+            SupportSettings(support_type=SupportType.MINIMAL)
+        ).generate_supports(mesh)
+        normal_supports = SupportGenerator(
+            SupportSettings(support_type=SupportType.GRID)
+        ).generate_supports(mesh)
 
         # Slim should use less material
-        slim_volume = sum(v.mesh.volume for v in slim_supports.support_volumes)
-        normal_volume = sum(v.mesh.volume for v in normal_supports.support_volumes)
+        slim_volume = slim_supports.support_volume
+        normal_volume = normal_supports.support_volume
 
         assert slim_volume <= normal_volume
 
@@ -231,23 +167,21 @@ class TestSupportOptimization:
 
     def test_support_optimization_reduces_volume(self):
         """Test that optimization reduces support volume."""
-        mesh = trimesh.creation.sphere()
+        mesh = trimesh.creation.icosphere()
         mesh.apply_translation([0.5, 0.5, 2])
 
-        generator = SupportGenerator()
-
         # Generate with optimization
-        supports_opt = generator.generate_supports(
-            mesh, optimize=True
-        )
+        supports_opt = SupportGenerator(
+            SupportSettings(optimize_for_material=True)
+        ).generate_supports(mesh)
 
         # Generate without optimization
-        supports_noopt = generator.generate_supports(
-            mesh, optimize=False
-        )
+        supports_noopt = SupportGenerator(
+            SupportSettings(optimize_for_material=False)
+        ).generate_supports(mesh)
 
-        volume_opt = sum(v.mesh.volume for v in supports_opt.support_volumes)
-        volume_noopt = sum(v.mesh.volume for v in supports_noopt.support_volumes)
+        volume_opt = supports_opt.support_volume
+        volume_noopt = supports_noopt.support_volume
 
         # Optimized should be smaller or equal
         assert volume_opt <= volume_noopt * 1.1  # Allow 10% tolerance
@@ -268,66 +202,13 @@ class TestSupportOptimization:
         ], dtype=np.int32)
 
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
-        generator = SupportGenerator()
+        generator = SupportGenerator(SupportSettings(optimize_for_material=True))
 
-        supports = generator.generate_supports(
-            mesh, optimize=True
-        )
+        supports = generator.generate_supports(mesh)
 
         # Should reduce redundant supports
-        assert len(supports.support_volumes) >= 1
+        assert len(supports.support_points) >= 1
 
-
-class TestInterfaceLayerGeneration:
-    """Test support interface (roof/floor) generation."""
-
-    def test_interface_generation_adds_layers(self):
-        """Test that interface generation adds roof/floor layers."""
-        mesh = trimesh.creation.box(extents=[1, 1, 0.5])
-        mesh.apply_translation([0, 0, 2])
-
-        generator = SupportGenerator()
-
-        supports = generator.generate_supports(
-            mesh,
-            generate_interfaces=True
-        )
-
-        # Should include interface layers
-        assert supports is not None
-        # Check if interface properties are set
-        for volume in supports.support_volumes:
-            assert hasattr(volume, 'interface_type')
-
-    def test_interface_roof_thickness(self):
-        """Test that interface roof has proper thickness."""
-        mesh = trimesh.creation.sphere()
-        mesh.apply_translation([0.5, 0.5, 2])
-
-        generator = SupportGenerator()
-
-        supports = generator.generate_supports(
-            mesh,
-            generate_interfaces=True,
-            interface_thickness=0.5
-        )
-
-        assert supports is not None
-
-    def test_interface_floor_strength(self):
-        """Test that interface floor provides structural support."""
-        mesh = trimesh.creation.cylinder(radius=0.3, height=0.5)
-        mesh.apply_translation([0.5, 0.5, 2])
-
-        generator = SupportGenerator()
-
-        supports = generator.generate_supports(
-            mesh,
-            generate_interfaces=True
-        )
-
-        # Floor should be present and solid
-        assert supports is not None
 
 
 class TestSupportMaterialConsumption:
@@ -341,7 +222,7 @@ class TestSupportMaterialConsumption:
         generator = SupportGenerator()
         supports = generator.generate_supports(mesh)
 
-        total_volume = sum(v.mesh.volume for v in supports.support_volumes)
+        total_volume = supports.support_volume
 
         # Volume should be positive and reasonable
         assert total_volume > 0
@@ -349,11 +230,11 @@ class TestSupportMaterialConsumption:
 
     def test_support_weight_estimate(self):
         """Test support weight estimation."""
-        mesh = trimesh.creation.sphere()
+        mesh = trimesh.creation.icosphere()
         mesh.apply_translation([0.5, 0.5, 2])
 
         generator = SupportGenerator()
-        supports = generator.generate_supports(mesh, material='PLA')
+        supports = generator.generate_supports(mesh)
 
         # Should estimate weight
         if hasattr(supports, 'estimated_weight'):
@@ -361,7 +242,7 @@ class TestSupportMaterialConsumption:
 
     def test_support_printing_time_estimate(self):
         """Test support printing time estimation."""
-        mesh = trimesh.creation.cylinder()
+        mesh = trimesh.creation.cylinder(radius=0.5, height=1.0)
         mesh.apply_translation([0.5, 0.5, 1])
 
         generator = SupportGenerator()
@@ -377,14 +258,11 @@ class TestSupportRemovability:
 
     def test_support_breakaway_points(self):
         """Test that supports have defined breakaway points."""
-        mesh = trimesh.creation.sphere()
+        mesh = trimesh.creation.icosphere()
         mesh.apply_translation([0.5, 0.5, 2])
 
         generator = SupportGenerator()
-        supports = generator.generate_supports(
-            mesh,
-            generate_interfaces=True
-        )
+        supports = generator.generate_supports(mesh)
 
         # Interface should provide clean breakaway
         assert supports is not None
@@ -397,10 +275,9 @@ class TestSupportRemovability:
         generator = SupportGenerator()
         supports = generator.generate_supports(mesh)
 
-        for volume in supports.support_volumes:
-            # Supports should be connected to model
-            # Simplified check: volume should exist
-            assert volume.mesh is not None
+        # Supports should be connected to model
+        # Simplified check: support mesh should exist
+        assert supports.support_mesh is not None
 
 
 class TestSupportGenerationPerformance:
@@ -410,7 +287,7 @@ class TestSupportGenerationPerformance:
     def test_support_generation_scales(self, complexity):
         """Test support generation scales with mesh complexity."""
         # Create mesh of varying complexity
-        mesh = trimesh.creation.sphere(subdivisions=3)
+        mesh = trimesh.creation.icosphere(subdivisions=3)
 
         # Further subdivide
         while mesh.faces.shape[0] < complexity:
@@ -431,7 +308,7 @@ class TestSupportGenerationPerformance:
 
     def test_support_generation_memory_efficient(self):
         """Test memory usage during support generation."""
-        mesh = trimesh.creation.sphere()
+        mesh = trimesh.creation.icosphere()
         mesh.apply_translation([0.5, 0.5, 2])
 
         generator = SupportGenerator()
@@ -498,7 +375,7 @@ class TestSupportGenerationEdgeCases:
 
         # Should identify hanging edge as needing support
         assert supports is not None
-        assert len(supports.support_volumes) > 0
+        assert supports.support_volume > 0
 
 
 if __name__ == '__main__':

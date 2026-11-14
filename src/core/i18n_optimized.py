@@ -828,7 +828,11 @@ class I18nManager:
 
         # Try current language first, then fallback through priority list
         text = ""
-        for priority_lang in self.config.language_priority:
+        lookup_order = [self.current_language] + [
+            lang for lang in self.config.language_priority
+            if lang != self.current_language
+        ]
+        for priority_lang in lookup_order:
             lang_key = priority_lang.value.lower()
             potential_text = getattr(translation, lang_key, "")
             if potential_text:

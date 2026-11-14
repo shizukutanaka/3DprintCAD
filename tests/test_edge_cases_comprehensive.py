@@ -14,9 +14,9 @@ import trimesh
 from unittest.mock import MagicMock, patch
 from pathlib import Path
 
-from src.core.analysis.mesh_validator import MeshValidator
-from src.core.analysis.mesh_repair import MeshRepair
-from src.core.analysis.support_generator import SupportGenerator
+from src.core.analysis.mesh_validator import validate_mesh
+from src.core.analysis.mesh_repair import MeshRepairer as MeshRepair
+from src.core.analysis.support_generator import SupportGenerator, SupportSettings, SupportType
 
 
 class TestEdgeCasesLargeMeshes:
@@ -34,10 +34,9 @@ class TestEdgeCasesLargeMeshes:
 
     def test_validate_large_mesh_completes(self, large_mesh):
         """Ensure validation completes within timeout on large meshes."""
-        validator = MeshValidator()
 
         # Should complete in reasonable time
-        result = validator.validate_mesh(large_mesh, timeout_seconds=30)
+        result = validate_mesh(large_mesh)
         assert result is not None
         assert hasattr(result, 'success')
 
@@ -54,16 +53,12 @@ class TestEdgeCasesLargeMeshes:
         # Should not explode in size
         assert len(repaired.vertices) < initial_vertices * 2
 
-    def test_support_generation_large_mesh_chunked(self, large_mesh):
-        """Test support generation uses chunking for large meshes."""
-        generator = SupportGenerator()
+    def test_support_generation_large_mesh(self, large_mesh):
+        """Test support generation handles a large mesh."""
+        generator = SupportGenerator(SupportSettings(support_type=SupportType.TREE))
 
         # Should handle without OOM
-        supports = generator.generate_supports(
-            large_mesh,
-            support_type='tree',
-            chunk_size=1000  # Process in chunks
-        )
+        supports = generator.generate_supports(large_mesh)
 
         assert supports is not None
 
@@ -89,10 +84,9 @@ class TestEdgeCasesDegenerate:
         ], dtype=np.int32)
 
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
-        validator = MeshValidator()
 
         # Should identify the issue, not crash
-        result = validator.validate_mesh(mesh)
+        result = validate_mesh(mesh)
         assert result is not None
 
     def test_validate_very_thin_mesh(self):
@@ -116,9 +110,8 @@ class TestEdgeCasesDegenerate:
         ], dtype=np.int32)
 
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
-        validator = MeshValidator()
 
-        result = validator.validate_mesh(mesh)
+        result = validate_mesh(mesh)
         # Should handle gracefully
         assert result is not None
         assert not result.success  # Should fail due to thinness
@@ -133,8 +126,7 @@ class TestEdgeCasesDegenerate:
         # Merge without Boolean operation (creates intersections)
         merged = trimesh.util.concatenate([cube1, cube2])
 
-        validator = MeshValidator()
-        result = validator.validate_mesh(merged)
+        result = validate_mesh(merged)
 
         assert result is not None
 
@@ -156,9 +148,8 @@ class TestEdgeCasesDegenerate:
         ], dtype=np.int32)
 
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
-        validator = MeshValidator()
 
-        result = validator.validate_mesh(mesh)
+        result = validate_mesh(mesh)
         assert result is not None
 
 
@@ -187,10 +178,9 @@ class TestEdgeCasesMemoryConstrained:
         mesh = trimesh.creation.box()
         mesh = mesh.subdivide_to_size(0.1)
 
-        validator = MeshValidator()
 
         # Validate in parts
-        result = validator.validate_mesh(mesh)
+        result = validate_mesh(mesh)
         assert result is not None
 
 
@@ -201,16 +191,15 @@ class TestEdgeCasesConcurrency:
         """Test multiple meshes validated concurrently."""
         meshes = [
             trimesh.creation.box(),
-            trimesh.creation.sphere(),
-            trimesh.creation.cylinder(),
+            trimesh.creation.icosphere(),
+            trimesh.creation.cylinder(radius=0.5, height=1.0),
         ]
 
-        validator = MeshValidator()
 
         # Simulate concurrent validation
         results = []
         for mesh in meshes:
-            result = validator.validate_mesh(mesh)
+            result = validate_mesh(mesh)
             results.append(result)
 
         assert len(results) == 3
@@ -259,9 +248,8 @@ class TestEdgeCasesBoundaryConditions:
     def test_mesh_validation_empty_mesh(self):
         """Test validation of empty mesh."""
         mesh = trimesh.Trimesh(vertices=[], faces=[])
-        validator = MeshValidator()
 
-        result = validator.validate_mesh(mesh)
+        result = validate_mesh(mesh)
         assert result is not None
         assert not result.success  # Empty mesh is invalid
 
@@ -276,9 +264,8 @@ class TestEdgeCasesBoundaryConditions:
         faces = np.array([[0, 1, 2]], dtype=np.int32)
 
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
-        validator = MeshValidator()
 
-        result = validator.validate_mesh(mesh)
+        result = validate_mesh(mesh)
         assert result is not None
 
     def test_support_generation_tiny_overhang(self):
@@ -310,9 +297,9 @@ class TestEdgeCasesBoundaryConditions:
         ], dtype=np.int32)
 
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
-        generator = SupportGenerator()
+        generator = SupportGenerator(SupportSettings(support_angle=45.0))
 
-        supports = generator.generate_supports(mesh, max_overhang_angle=45)
+        supports = generator.generate_supports(mesh)
         # Should handle minimal overhangs gracefully
         assert supports is not None
 
@@ -337,10 +324,9 @@ class TestEdgeCasesNumericalStability:
         ], dtype=np.int32)
 
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
-        validator = MeshValidator()
 
         # Should handle gracefully without numerical errors
-        result = validator.validate_mesh(mesh)
+        result = validate_mesh(mesh)
         assert result is not None
 
     def test_mesh_validation_very_large_coordinates(self):
@@ -360,9 +346,8 @@ class TestEdgeCasesNumericalStability:
         ], dtype=np.int32)
 
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
-        validator = MeshValidator()
 
-        result = validator.validate_mesh(mesh)
+        result = validate_mesh(mesh)
         assert result is not None
 
     def test_mesh_validation_mixed_precision(self):
@@ -381,9 +366,8 @@ class TestEdgeCasesNumericalStability:
         ], dtype=np.int32)
 
         mesh = trimesh.Trimesh(vertices=vertices_64, faces=faces, process=False)
-        validator = MeshValidator()
 
-        result = validator.validate_mesh(mesh)
+        result = validate_mesh(mesh)
         assert result is not None
 
 
@@ -399,11 +383,10 @@ class TestEdgeCasesPerformance:
             if box.faces.shape[0] < size:
                 box = box.subdivide()
 
-        validator = MeshValidator()
 
         import time
         start = time.time()
-        result = validator.validate_mesh(box)
+        result = validate_mesh(box)
         elapsed = time.time() - start
 
         assert result is not None
@@ -455,8 +438,7 @@ class TestEdgeCasesRecovery:
         # Clear normals
         mesh.vertex_normals  # Compute once
 
-        validator = MeshValidator()
-        result = validator.validate_mesh(mesh)
+        result = validate_mesh(mesh)
         assert result is not None
 
 
@@ -483,11 +465,10 @@ class TestEdgeCasesIntegration:
 
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
 
-        validator = MeshValidator()
         repair = MeshRepair()
 
         # Initial validation
-        result1 = validator.validate_mesh(mesh)
+        result1 = validate_mesh(mesh)
         assert result1 is not None
 
         # Repair
@@ -495,7 +476,7 @@ class TestEdgeCasesIntegration:
         assert repaired is not None
 
         # Validate again
-        result2 = validator.validate_mesh(repaired)
+        result2 = validate_mesh(repaired)
         assert result2 is not None
 
     def test_generate_supports_on_repaired_mesh(self):

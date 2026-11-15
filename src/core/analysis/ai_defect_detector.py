@@ -2732,7 +2732,13 @@ class InferenceOptimizer:
         def batch_processor():
             while not self._shutdown_event.is_set():
                 try:
-                    # Process batch if we have enough items
+                    # Process batch if we have enough items. ``batch`` must
+                    # start empty on every iteration: previously it was only
+                    # assigned when the buffer was full, so the common case
+                    # (buffer below max_batch_size) raised UnboundLocalError
+                    # on ``if batch:`` and the handler logged an error every
+                    # second for the life of the thread.
+                    batch = []
                     with self._batch_lock:
                         if len(self.batch_buffer) >= self.max_batch_size:
                             batch = self.batch_buffer[:self.max_batch_size]

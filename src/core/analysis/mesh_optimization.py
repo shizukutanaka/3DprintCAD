@@ -187,11 +187,13 @@ class MeshOptimizer:
             # Remove duplicate vertices
             mesh.merge_vertices()
 
-            # Remove degenerate faces
-            mesh.remove_degenerate_faces()
+            # Remove degenerate faces (trimesh 4.x removed
+            # remove_degenerate_faces(); mask to nondegenerate faces)
+            mesh.update_faces(mesh.nondegenerate_faces())
 
-            # Remove duplicate faces
-            mesh.remove_duplicate_faces()
+            # Remove duplicate faces (trimesh 4.x removed
+            # remove_duplicate_faces(); mask to unique faces)
+            mesh.update_faces(mesh.unique_faces())
 
             # Remove unreferenced vertices
             mesh.remove_unreferenced_vertices()

@@ -192,8 +192,14 @@ class MeshRepairer:
         return mesh
 
     def _remove_duplicate_vertices(self, mesh: trimesh.Trimesh) -> trimesh.Trimesh:
-        """Remove duplicate vertices."""
-        mesh.remove_duplicate_faces()
+        """Remove duplicate faces (trimesh 4.x: update_faces with unique_faces).
+
+        Trimesh removed ``Trimesh.remove_duplicate_faces()`` in 4.x; the
+        supported equivalent is masking the face array down to the unique
+        faces. Duplicate *vertices* are handled by the separate
+        MERGE_VERTICES operation.
+        """
+        mesh.update_faces(mesh.unique_faces())
         return mesh
 
     def _merge_close_vertices(self, mesh: trimesh.Trimesh, threshold: float = 1e-6) -> trimesh.Trimesh:

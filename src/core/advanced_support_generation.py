@@ -485,8 +485,14 @@ class AdvancedSupportGenerator:
                 )
                 cylinder.apply_transform(rotation_matrix)
 
-            # Translate to start position
-            cylinder.apply_translation(start_point)
+            # Translate so the cylinder spans start_point -> end_point.
+            # trimesh.creation.cylinder is centered on the origin (it
+            # spans -height/2..+height/2 along its axis), so the cylinder
+            # must be moved to the segment midpoint; translating it to
+            # start_point instead left half of every pillar below its
+            # base (under the build plate) and the other half short of
+            # the contact point.
+            cylinder.apply_translation((start_point + end_point) / 2.0)
 
             return cylinder
 

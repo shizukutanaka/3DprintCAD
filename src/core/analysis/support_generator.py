@@ -191,6 +191,13 @@ class SupportGenerator:
             if support_point[2] < min_z - self.settings.support_thickness:
                 support_point[2] = min_z - self.settings.support_thickness
 
+            # Never place a support point below the build plate
+            # (z=0). Points below the plate made the pillar builder
+            # extrude downwards, producing inside-out geometry whose
+            # volume was then reported as 0.
+            if support_point[2] < 0.0:
+                support_point[2] = 0.0
+
             support_points.append(support_point)
 
         # Remove duplicate points and cluster nearby points
@@ -254,14 +261,33 @@ class SupportGenerator:
     def _create_tree_supports(self, mesh: trimesh.Trimesh,
                             support_points: List[np.ndarray]) -> trimesh.Trimesh:
         """Create tree-like support structures."""
+        # Collapse points that share an (x, y) axis, keeping only the
+        # tallest: a vertical pillar up to the highest contact already
+        # contains any shorter pillar on the same axis, and emitting
+        # both produced identical cap faces on the shared base ring.
+        # Those duplicate faces made the combined mesh non-watertight,
+        # so its (real) volume was reported as 0.
+        highest_by_axis: Dict[Tuple[float, float], np.ndarray] = {}
+        for point in support_points:
+            axis = (round(float(point[0]), 6), round(float(point[1]), 6))
+            if axis not in highest_by_axis or point[2] > highest_by_axis[axis][2]:
+                highest_by_axis[axis] = point
+        support_points = list(highest_by_axis.values())
+
         # Simplified tree support implementation
         support_vertices = []
         support_faces = []
 
         for i, point in enumerate(support_points):
-            # Create vertical support pillar
-            base_z = 0.0  # Assuming build plate at z=0
+            # Create vertical support pillar from the build plate
+            # (z=0) up to the support point.
+            base_z = 0.0
             height = point[2] - base_z
+
+            if height <= 1e-9:
+                # Support point rests on the plate itself; a pillar of
+                # zero (or negative) height is degenerate, skip it.
+                continue
 
             # Create simple cylindrical support
             radius = self.settings.support_thickness / 2
@@ -319,6 +345,15 @@ class SupportGenerator:
                     [start_idx + segments, start_idx + segments + k,
                      start_idx + segments + k + 1]
                 )
+
+        if not support_vertices:
+            # Every support point rests on the build plate, so no
+            # pillar is needed. Return a valid empty mesh instead of
+            # letting Trimesh choke on shape-less empty lists.
+            return trimesh.Trimesh(
+                vertices=np.empty((0, 3)),
+                faces=np.empty((0, 3), dtype=np.int64),
+            )
 
         return trimesh.Trimesh(vertices=support_vertices, faces=support_faces)
 

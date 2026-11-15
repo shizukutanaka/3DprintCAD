@@ -115,9 +115,16 @@ class TestNormalSupportGeneration:
             [0.3, 0.3, 2], [0.7, 0.3, 2], [0.7, 0.7, 2], [0.3, 0.7, 2],
         ], dtype=np.float64)
 
+        # The floating top plate is the overhang: its faces are wound
+        # as the plate's underside (normal -z). They were previously
+        # wound as a top surface (+z), so the only face the detector
+        # flagged was the base plate lying on the build plate -- and
+        # this test passed only because the generator built a pillar
+        # *below* the build plate for it (the defect fixed in
+        # src/core/analysis/support_generator.py).
         faces = np.array([
             [0, 2, 1], [0, 3, 2],
-            [4, 5, 6], [4, 6, 7],
+            [4, 6, 5], [4, 7, 6],
         ], dtype=np.int32)
 
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)

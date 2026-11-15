@@ -2,26 +2,39 @@
 
 ## 概要 / Overview
 
-This comprehensive guide provides step-by-step instructions for deploying 3D Print CAD Assistant in production environments suitable for national-level usage. It covers infrastructure setup, security hardening, monitoring, and operational procedures.
+This guide provides step-by-step instructions for deploying 3D Print CAD Assistant in production. It covers infrastructure setup, security hardening, monitoring, and operational procedures.
 
-本ガイドは、3D Print CAD Assistantを国家レベルで使用可能な本番環境にデプロイするための包括的な手順を提供します。インフラ設定、セキュリティ強化、監視、運用手順をカバーします。
+本ガイドは、3D Print CAD Assistantを本番環境にデプロイするための手順を提供します。インフラ設定、セキュリティ強化、監視、運用手順をカバーします。
+
+> **Current topology (corrected 2026-11-15)**: The supported production
+> topology is the single-host container deployment defined by this
+> repository's `Dockerfile` and `docker-compose.yml`: one Flask
+> application container (gunicorn, port 5000) behind one Nginx reverse
+> proxy, plus a single Redis container used as a cache. Application
+> data (audit logs, compliance records, uploads) is persisted as
+> SQLite database files and plain files on a local data volume.
+> **There is no PostgreSQL server** — earlier editions of this guide
+> described a PostgreSQL primary/replica topology that the
+> application does not use; those sections have been corrected.
+> Multi-server high availability is not part of the current topology
+> (see the appendix for what would have to change).
 
 ---
 
 ## Prerequisites / 前提条件
 
 ### Infrastructure Requirements
-- **Compute**: 4+ vCPU, 16GB+ RAM (per instance)
-- **Storage**: 500GB+ SSD (for models, logs, backups)
+- **Compute**: 4+ vCPU, 16GB+ RAM (single host, per the container deployment below)
+- **Storage**: SSD sized for the models, logs and backups you keep on the local data volume
 - **Network**: 1Gbps+ bandwidth, static IP address
 - **OS**: Ubuntu 22.04 LTS or RHEL 8+ (recommended)
 
 ### Software Requirements
-- Python 3.11+
-- PostgreSQL 15+ (for data persistence)
-- Redis 7+ (for caching and sessions)
-- Nginx 1.24+ (reverse proxy)
-- Docker 24+ / Kubernetes 1.28+ (containerized deployment)
+- Docker 24+ with Compose (the supported deployment path: `Dockerfile` / `docker-compose.yml`)
+- Python 3.11+ (inside the application container; also the version used by the bare-metal path in Step 3)
+- Redis 7 (single instance, cache; runs as a container in the compose deployment)
+- Nginx 1.24+ (reverse proxy; runs as a container in the compose deployment)
+- No external database server: persistence is SQLite files on the data volume (see Step 2)
 
 ### Security Requirements
 - SSL/TLS certificates (valid commercial CA)
@@ -33,34 +46,34 @@ This comprehensive guide provides step-by-step instructions for deploying 3D Pri
 
 ## Architecture Overview / アーキテクチャ概要
 
+The current production topology is the single-host container
+deployment shipped in this repository (`docker-compose.yml`):
+
 ```
 ┌─────────────────────────────────────────────────────┐
-│               Load Balancer (HA)                     │
-│              (Nginx / AWS ALB)                       │
-└─────────────────┬───────────────────────────────────┘
-                  │
-     ┌────────────┼────────────┐
-     │            │            │
-┌────▼────┐  ┌───▼─────┐ ┌───▼─────┐
-│ App     │  │ App     │ │ App     │
-│ Server  │  │ Server  │ │ Server  │
-│ (Flask) │  │ (Flask) │ │ (Flask) │
-└────┬────┘  └───┬─────┘ └───┬─────┘
-     │           │            │
-     └───────────┼────────────┘
-                 │
-     ┌───────────┼────────────┐
-     │           │            │
-┌────▼────┐ ┌───▼─────┐ ┌───▼──────┐
-│ PostgreSQL│ │ Redis  │ │ S3/Minio │
-│ (Primary) │ │ Cluster│ │ Storage  │
-└────┬────┘ └─────────┘ └──────────┘
-     │
-┌────▼────┐
-│PostgreSQL│
-│(Replica) │
-└─────────┘
+│                    Host (single)                     │
+│                                                      │
+│   ┌──────────────┐      ┌─────────────────────────┐  │
+│   │    Nginx     │      │  web (this repository)  │  │
+│   │  reverse     ├─────►│  Flask + gunicorn       │  │
+│   │  proxy       │      │  port 5000              │  │
+│   │  80 / 443    │      │  4 workers x 2 threads  │  │
+│   └──────────────┘      └───────────┬─────────────┘  │
+│         ▲                           │                │
+│         │                 ┌─────────┴─────────┐      │
+│      clients              │                   │      │
+│                    ┌──────▼──────┐   ┌────────▼───┐  │
+│                    │    Redis    │   │ data volume│  │
+│                    │ 7 (cache,   │   │ SQLite DBs │  │
+│                    │ single)     │   │ + uploads  │  │
+│                    └─────────────┘   └────────────┘  │
+└─────────────────────────────────────────────────────┘
 ```
+
+The application keeps its persistent state in SQLite database files
+and uploaded/result files on the data volume (`./data` on the host,
+`/data` in the container). Redis is a cache only; losing it does not
+lose application data.
 
 ---
 
@@ -88,7 +101,6 @@ sudo apt install -y \
     python3.11 \
     python3.11-venv \
     python3-pip \
-    postgresql-client \
     redis-tools \
     nginx \
     supervisor \
@@ -117,62 +129,34 @@ sudo systemctl start fail2ban
 
 ---
 
-## Step 2: Database Setup / データベース設定
+## Step 2: Data Layer Setup / データ層の設定
 
-### 2.1 PostgreSQL Installation and Configuration
-```bash
-# Install PostgreSQL
-sudo apt install postgresql-15 postgresql-contrib-15
+### 2.1 Data Persistence (SQLite on the data volume)
 
-# Secure PostgreSQL
-sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'STRONG_PASSWORD_HERE';"
+The application does **not** use an external database server. Its
+persistent state lives in SQLite database files (audit log, compliance
+records) and plain files (uploads, results) under a single data
+directory:
 
-# Create application database and user
-sudo -u postgres psql <<EOF
-CREATE DATABASE printcad_production;
-CREATE USER printcad_app WITH ENCRYPTED PASSWORD 'APP_DB_PASSWORD_HERE';
-GRANT ALL PRIVILEGES ON DATABASE printcad_production TO printcad_app;
-ALTER DATABASE printcad_production OWNER TO printcad_app;
-\c printcad_production
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pg_trgm";
-EOF
-```
+- Container deployment: host `./data` mounted at `/data` in the
+  `web` container (see `docker-compose.yml`).
+- Bare-metal deployment: the directories created in Step 1.1
+  (`/opt/printcad/data`, `/opt/printcad/logs`).
 
-### 2.2 PostgreSQL Hardening
-```bash
-# Edit postgresql.conf
-sudo vim /etc/postgresql/15/main/postgresql.conf
+The SQLite files are created automatically by the application on
+first use; there is no database server to install, secure, or
+replicate. Protect the data directory with filesystem permissions
+(Step 1.1) and include it in backups (it contains all persistent
+state). Because all state is local files, the application cannot be
+scaled out to multiple hosts without reworking this layer — see the
+appendix.
 
-# Add/modify these settings:
-ssl = on
-ssl_ciphers = 'ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256'
-password_encryption = scram-sha-256
-log_connections = on
-log_disconnections = on
-log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
-log_statement = 'all'
-max_connections = 100
-shared_buffers = 4GB
-effective_cache_size = 12GB
-maintenance_work_mem = 1GB
-work_mem = 64MB
+### 2.2 Redis Setup (single instance, cache)
 
-# Edit pg_hba.conf for secure access
-sudo vim /etc/postgresql/15/main/pg_hba.conf
+In the container deployment Redis runs as the single `redis`
+service from `docker-compose.yml` (appendonly persistence, used as
+a cache). The bare-metal equivalent is a single local instance:
 
-# Add/modify:
-# TYPE  DATABASE        USER            ADDRESS                 METHOD
-local   all             postgres                                peer
-local   all             all                                     scram-sha-256
-host    printcad_production  printcad_app    127.0.0.1/32       scram-sha-256
-host    printcad_production  printcad_app    ::1/128            scram-sha-256
-
-# Restart PostgreSQL
-sudo systemctl restart postgresql
-```
-
-### 2.3 Redis Setup
 ```bash
 # Install Redis
 sudo apt install redis-server
@@ -216,7 +200,7 @@ source /opt/printcad/venv/bin/activate
 # Install dependencies
 pip install --upgrade pip
 pip install -r requirements.txt
-pip install gunicorn gevent psycopg2-binary redis
+pip install gunicorn gevent redis
 ```
 
 ### 3.2 Environment Configuration
@@ -228,11 +212,10 @@ FLASK_ENV=production
 SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(64))')
 PYTHONUNBUFFERED=1
 
-# Database Configuration
-DATABASE_URL=postgresql://printcad_app:APP_DB_PASSWORD_HERE@localhost:5432/printcad_production
-DB_POOL_SIZE=20
-DB_MAX_OVERFLOW=10
-DB_POOL_TIMEOUT=30
+# Data Persistence
+# No database server and no DATABASE_URL: the application stores its
+# state in SQLite database files and plain files under the data
+# directory (see "Storage Configuration" below and Step 2.1).
 
 # Redis Configuration
 REDIS_URL=redis://:YOUR_REDIS_PASSWORD_HERE@localhost:6379/0
@@ -289,18 +272,19 @@ chmod 750 /opt/printcad/data/{uploads,results}
 chmod 750 /opt/printcad/logs
 ```
 
-### 3.3 Database Migration
+### 3.3 Data Initialization
 ```bash
 # Activate environment
 source /opt/printcad/venv/bin/activate
 export $(cat /opt/printcad/config/.env.production | xargs)
 
-# Run database migrations (create tables)
+# No migration step: the SQLite stores create their files and tables
+# on first use. Initializing the managers once verifies the data
+# directory is writable and the stores can be created.
 python -c "
 from src.core.config import get_config
 from src.core.compliance_manager import ComplianceManager
-# Initialize database schema
-# Add your migration logic here
+# Initialize local data stores (SQLite files under the data directory)
 "
 ```
 
@@ -361,8 +345,8 @@ EOF
 sudo cat > /etc/systemd/system/printcad.service <<'EOF'
 [Unit]
 Description=3D Print CAD Assistant Production Server
-After=network.target postgresql.service redis-server.service
-Wants=postgresql.service redis-server.service
+After=network.target redis-server.service
+Wants=redis-server.service
 
 [Service]
 Type=notify
@@ -661,16 +645,17 @@ set -euo pipefail
 BACKUP_DIR="/opt/printcad/backups/database"
 RETENTION_DAYS=30
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_FILE="$BACKUP_DIR/printcad_db_$TIMESTAMP.sql.gz"
+BACKUP_FILE="$BACKUP_DIR/printcad_data_$TIMESTAMP.tar.gz"
 
 # Create backup directory
 mkdir -p "$BACKUP_DIR"
 
 # Export database password
-export PGPASSWORD="APP_DB_PASSWORD_HERE"
 
 # Perform backup
-pg_dump -h localhost -U printcad_app -d printcad_production | gzip > "$BACKUP_FILE"
+# Perform backup (application data = SQLite files and stored files
+# under the data directory; there is no database server to dump)
+tar -czf "$BACKUP_FILE" -C /opt/printcad data
 
 # Encrypt backup
 openssl enc -aes-256-cbc -salt -in "$BACKUP_FILE" -out "$BACKUP_FILE.enc" -pass pass:"$ENCRYPTION_KEY"
@@ -679,7 +664,7 @@ rm "$BACKUP_FILE"
 # Remove old backups
 find "$BACKUP_DIR" -name "*.enc" -mtime +$RETENTION_DAYS -delete
 
-echo "[$(date -Iseconds)] Database backup completed: $BACKUP_FILE.enc"
+echo "[$(date -Iseconds)] Data backup completed: $BACKUP_FILE.enc"
 EOF
 
 chmod +x /opt/printcad/scripts/backup_database.sh
@@ -876,17 +861,20 @@ export $(cat /opt/printcad/config/.env.production | xargs)
 python run_server.py
 ```
 
-**Issue**: Database connection failures
+**Issue**: Data layer errors (audit/compliance storage, uploads)
 **Solution**:
 ```bash
-# Test database connectivity
-psql -h localhost -U printcad_app -d printcad_production
+# The application persists to SQLite files and plain files on the
+# data volume; check the volume is mounted and writable
+ls -la /opt/printcad/data        # bare-metal path (container: ./data)
+df -h /opt/printcad/data
 
-# Check PostgreSQL logs
-sudo tail -f /var/log/postgresql/postgresql-15-main.log
+# Check the SQLite files are present and readable by the app user
+sudo -u printcad ls -la /opt/printcad/data
 
-# Verify pg_hba.conf settings
-sudo cat /etc/postgresql/15/main/pg_hba.conf
+# Redis is a cache only: if it is down the app degrades, it does not
+# lose data. Check it separately:
+redis-cli ping
 ```
 
 **Issue**: High memory usage
@@ -912,7 +900,7 @@ sudo systemctl restart printcad.service
 
 - [ ] All secrets stored in environment variables or secret management system
 - [ ] SSL/TLS certificates installed and configured
-- [ ] Database encrypted at rest and in transit
+- [ ] Data volume (SQLite files, uploads) protected by filesystem permissions and encrypted at rest
 - [ ] Strong passwords set for all services
 - [ ] Firewall configured and enabled
 - [ ] Fail2ban configured and monitoring logs
@@ -952,21 +940,25 @@ For production deployment support:
 
 ## Appendix: High Availability Setup / 付録: 高可用性設定
 
-### Multi-Server Deployment
+### Multi-Server Deployment (not the current topology)
 
-For national-level deployments requiring high availability:
+The current application does **not** support multi-server deployment:
+all persistent state is SQLite files and plain files on one host's
+data volume, and the shipped deployment is the single-host topology
+described at the top of this guide. The items below are what a
+future HA design would have to introduce — they are listed so the
+gap is explicit, not as a supported configuration:
 
-1. **Load Balancer**: Deploy HAProxy or AWS ALB with health checks
+1. **Load Balancer**: HAProxy or AWS ALB with health checks
 2. **Application Servers**: 3+ instances across availability zones
-3. **Database**: PostgreSQL replication (primary-standby or multi-master)
+3. **Database**: state would first have to move off local SQLite
+   files to a replicated store (e.g. PostgreSQL primary-standby)
 4. **Shared Storage**: NFS, GlusterFS, or S3-compatible object storage
 5. **Session Management**: Redis Sentinel or Redis Cluster
 6. **Monitoring**: Prometheus + Grafana for metrics and alerting
 
-See `docs/HIGH_AVAILABILITY.md` for detailed HA deployment guide.
-
 ---
 
-**Document Version**: 1.0.0
-**Last Updated**: 2025-10-06
+**Document Version**: 1.1.0
+**Last Updated**: 2026-11-15
 **Maintained By**: Infrastructure Team

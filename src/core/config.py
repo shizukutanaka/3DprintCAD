@@ -235,6 +235,11 @@ class Config:
     validation: ValidationConfig = field(default_factory=ValidationConfig)
     printer_profiles: Dict[str, PrinterProfile] = field(default_factory=dict)
     active_printer: Optional[str] = None
+    # Runtime-only: the directory this configuration was loaded from.
+    # ConfigManager stamps it on every Config it hands out; consumers
+    # such as the logging setup and the materials database derive their
+    # file locations from it. It is not serialized (see to_dict).
+    config_directory: Optional[Path] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -371,11 +376,13 @@ class ConfigManager:
             self._config = self._create_default_config()
             self.save()  # Save default configuration
 
+        self._config.config_directory = self.config_dir
         return self._config
 
     def save(self, config: Optional[Config] = None):
         """Save configuration to file."""
         config = config or self._config or self._create_default_config()
+        config.config_directory = self.config_dir
 
         try:
             with open(self.config_file, 'w', encoding='utf-8') as f:

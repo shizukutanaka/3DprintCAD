@@ -511,6 +511,10 @@ class ProgressStep:
     error: Optional[str] = None
     started_at: Optional[float] = None
     completed_at: Optional[float] = None
+    # Written by ProgressReporter._process_update and read by
+    # RealTimeProgressFormatter; this shadowing definition previously
+    # lacked the field.
+    current_operation: Optional[str] = None
 
 
 @dataclass
@@ -524,6 +528,21 @@ class ProgressTask:
     started_at: Optional[float] = None
     completed_at: Optional[float] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    # ProgressReporter.create_task passes a progress level; this class
+    # shadows the earlier ProgressTask definition in this module, so the
+    # field must exist here or reporter task creation raises TypeError.
+    progress_level: ProgressLevel = ProgressLevel.NORMAL
+
+    def add_step(self, name: str, weight: float = 1.0) -> ProgressStep:
+        """Add a progress step.
+
+        ProgressManager.create_task builds step lists through this
+        method; this shadowing definition previously lacked it, so
+        creating a task with steps raised AttributeError.
+        """
+        step = ProgressStep(name=name, weight=weight)
+        self.steps.append(step)
+        return step
 
     def get_progress(self) -> float:
         """Calculate overall progress percentage."""

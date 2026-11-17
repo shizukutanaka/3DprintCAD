@@ -269,6 +269,11 @@ class DistributedProcessingManager:
         self.task_queue = TaskQueue()
         self.workers: Dict[str, WorkerInfo] = {}
         self.active_tasks: Dict[str, ProcessingTask] = {}
+        # Finished tasks are kept here so get_task_status can report
+        # their outcome; previously they were dropped from active_tasks
+        # on completion and stored nowhere, so a completed task became
+        # unfindable (status queries returned None forever).
+        self.completed_tasks: Dict[str, ProcessingTask] = {}
         self.processor = MeshProcessingTaskProcessor()
 
         # Worker management
@@ -365,9 +370,10 @@ class DistributedProcessingManager:
             if worker_id in self.workers:
                 self.workers[worker_id].current_tasks -= 1
 
-            # Remove from active tasks
+            # Remove from active tasks and record the outcome
             if task.task_id in self.active_tasks:
                 del self.active_tasks[task.task_id]
+            self.completed_tasks[task.task_id] = task
 
     def _start_auto_scaler(self):
         """Start automatic scaling based on queue length."""
@@ -447,8 +453,10 @@ class DistributedProcessingManager:
         if task_id in self.active_tasks:
             return self.active_tasks[task_id]
 
-        # Check if task was completed and stored elsewhere
-        # (In a real implementation, this would query a database)
+        # Then tasks that already finished (see completed_tasks)
+        if task_id in self.completed_tasks:
+            return self.completed_tasks[task_id]
+
         return None
 
     def cancel_task(self, task_id: str) -> bool:

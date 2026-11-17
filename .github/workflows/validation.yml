@@ -143,6 +143,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: [validate-models, security-scan, build-and-test]
     if: always()
+    # The "Comment on PR" step posts a summary comment via the Issues API,
+    # which requires write access the default token may not have (403
+    # "Resource not accessible by integration" without it). Grant it
+    # explicitly, scoped to this job only.
+    permissions:
+      issues: write
+      pull-requests: write
 
     steps:
       - name: Check validation status

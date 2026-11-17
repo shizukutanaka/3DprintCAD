@@ -103,6 +103,12 @@ class SliceSettings:
     bridge_angle: float = 0
 
     # Speed settings
+    # Master print-speed override used by the CLI (--speed) and the web
+    # API: when set, it replaces the perimeter and infill speeds in
+    # __post_init__. Callers passed print_speed= to this constructor
+    # from the start, but the field never existed, so every slicing run
+    # through those entry points failed with TypeError.
+    print_speed: Optional[float] = None
     travel_speed: float = 180
     first_layer_speed: float = 20
     max_volumetric_speed: float = 15  # mm³/s
@@ -149,6 +155,14 @@ class SliceSettings:
     mold_mode: bool = False
     spiral_vase: bool = False
     smooth_spiralized_contours: bool = True
+
+    def __post_init__(self):
+        # Apply the master print-speed override (see the field comment):
+        # the engine reads perimeter_speed/infill_speed, so the single
+        # user-facing speed is folded into them at construction time.
+        if self.print_speed is not None:
+            self.perimeter_speed = self.print_speed
+            self.infill_speed = self.print_speed
 
 
 @dataclass

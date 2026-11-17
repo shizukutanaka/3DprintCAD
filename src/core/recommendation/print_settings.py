@@ -224,9 +224,9 @@ class RecommendationEngine:
 
         return presets
 
-    def recommend_material(self, validation_result: MeshValidationResult) -> str:
+    def recommend_material(self, validation_result: Optional[MeshValidationResult]) -> str:
         """Recommend material based on model characteristics."""
-        if not validation_result.metrics:
+        if validation_result is None or not validation_result.metrics:
             return "pla_standard"
 
         metrics = validation_result.metrics
@@ -252,9 +252,9 @@ class RecommendationEngine:
         # Default to PLA for general use
         return "pla_standard"
 
-    def calculate_infill_density(self, validation_result: MeshValidationResult) -> float:
+    def calculate_infill_density(self, validation_result: Optional[MeshValidationResult]) -> float:
         """Calculate optimal infill density based on model characteristics."""
-        if not validation_result.metrics:
+        if validation_result is None or not validation_result.metrics:
             return 15.0
 
         metrics = validation_result.metrics
@@ -279,12 +279,12 @@ class RecommendationEngine:
         return min(max(base_density, 10.0), 100.0)
 
     def estimate_print_time(self,
-                          validation_result: MeshValidationResult,
+                          validation_result: Optional[MeshValidationResult],
                           material_preset: MaterialPreset,
                           layer_height: float,
                           infill_density: float) -> float:
         """Estimate print time in hours."""
-        if not validation_result.metrics:
+        if validation_result is None or not validation_result.metrics:
             return 1.0
 
         metrics = validation_result.metrics
@@ -319,9 +319,9 @@ class RecommendationEngine:
         # Add setup and finishing time
         return max(total_time_hours + 0.5, 0.1)
 
-    def determine_optimal_orientation(self, validation_result: MeshValidationResult) -> Tuple[Tuple[float, float, float], str]:
+    def determine_optimal_orientation(self, validation_result: Optional[MeshValidationResult]) -> Tuple[Tuple[float, float, float], str]:
         """Determine optimal print orientation."""
-        if not validation_result.metrics:
+        if validation_result is None or not validation_result.metrics:
             return (0.0, 0.0, 0.0), "Default orientation"
 
         metrics = validation_result.metrics
@@ -342,8 +342,14 @@ class RecommendationEngine:
 
         return (0.0, 0.0, 0.0), "Default orientation"
 
-    def generate_recommendations(self, validation_result: MeshValidationResult) -> PrintRecommendations:
+    def generate_recommendations(self, validation_result: Optional[MeshValidationResult]) -> PrintRecommendations:
         """Generate comprehensive print recommendations."""
+        if validation_result is None:
+            # No validation was performed: fall back to the same
+            # defaults the guarded helpers below use for a result
+            # without metrics instead of crashing on attribute access.
+            validation_result = MeshValidationResult(path=None)
+
         # Select optimal material
         material_key = self.recommend_material(validation_result)
         material_preset = self._material_presets[material_key]

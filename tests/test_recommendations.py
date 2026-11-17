@@ -1,4 +1,5 @@
 """Unit tests for print recommendations functionality."""
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -61,11 +62,18 @@ def test_material_recommendation_high_detail():
 
     validation_result = mesh_validator.validate_mesh(mesh)
 
-    # Modify metrics to simulate high detail requirements
+    # Modify metrics to simulate high detail requirements.
+    # MeshValidationMetrics is a frozen dataclass, so the simulated
+    # values are injected with dataclasses.replace instead of direct
+    # assignment. The engine reads the feature size through its
+    # min_edge_length_mm fallback (metrics carries no dedicated
+    # min_feature_size_mm field).
     if validation_result.metrics:
-        # Simulate very fine features
-        validation_result.metrics.min_feature_size_mm = 0.1
-        validation_result.metrics.surface_roughness_score = 0.05
+        validation_result.metrics = replace(
+            validation_result.metrics,
+            min_edge_length_mm=0.1,
+            surface_roughness_score=0.05,
+        )
 
     material = engine.recommend_material(validation_result)
     assert material == "resin_standard"  # Should recommend resin for high detail
@@ -114,9 +122,11 @@ def test_infill_density_thin_walls():
     mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
     validation_result = mesh_validator.validate_mesh(mesh)
 
-    # Simulate thin walls
+    # Simulate thin walls (frozen metrics: inject via replace)
     if validation_result.metrics:
-        validation_result.metrics.min_wall_thickness_mm = 0.5
+        validation_result.metrics = replace(
+            validation_result.metrics, min_wall_thickness_mm=0.5
+        )
 
     infill = engine.calculate_infill_density(validation_result)
 
@@ -257,9 +267,11 @@ def test_recommendations_with_overhangs():
     mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
     validation_result = mesh_validator.validate_mesh(mesh)
 
-    # Simulate overhangs
+    # Simulate overhangs (frozen metrics: inject via replace)
     if validation_result.metrics:
-        validation_result.metrics.overhang_face_count = 15
+        validation_result.metrics = replace(
+            validation_result.metrics, overhang_face_count=15
+        )
 
     recommendations = engine.generate_recommendations(validation_result)
 

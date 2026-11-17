@@ -324,6 +324,29 @@ def validate_mesh(
             )
         )
 
+    # Self-intersection and OBJ material checks are structural and
+    # file-level findings: they stay meaningful when the mesh also fails
+    # the error gate below (two overlapping solids are the canonical
+    # self-intersection case, and they trip the gate through the
+    # multiple-components error), so they run before the early return.
+    if _has_self_intersections(mesh):
+        issues.append(
+            ValidationIssue(
+                code="GEOM_SELF_INTERSECTION",
+                message="Mesh contains self-intersecting faces that must be resolved before printing.",
+                severity="error",
+            )
+        )
+
+    if not _check_obj_material_groups(mesh, source_path):
+        issues.append(
+            ValidationIssue(
+                code="GEOM_OBJ_MATERIAL",
+                message="OBJ file is missing material assignments or definitions.",
+                severity="warning",
+            )
+        )
+
     critical_codes = {issue.code for issue in issues if issue.severity == "error"}
     if critical_codes:
         return MeshValidationResult(path=source_path, issues=issues, metrics=None)
@@ -345,15 +368,6 @@ def validate_mesh(
                 code="GEOM_FLOATING_SHELL",
                 message="Detected detached shells that may not adhere to the main body during printing.",
                 severity="warning",
-            )
-        )
-
-    if _has_self_intersections(mesh):
-        issues.append(
-            ValidationIssue(
-                code="GEOM_SELF_INTERSECTION",
-                message="Mesh contains self-intersecting faces that must be resolved before printing.",
-                severity="error",
             )
         )
 
@@ -524,15 +538,6 @@ def validate_mesh(
             ValidationIssue(
                 code="GEOM_REPAIR_GUIDANCE",
                 message="; ".join(repair_suggestions[:4]),
-                severity="warning",
-            )
-        )
-
-    if not _check_obj_material_groups(mesh, source_path):
-        issues.append(
-            ValidationIssue(
-                code="GEOM_OBJ_MATERIAL",
-                message="OBJ file is missing material assignments or definitions.",
                 severity="warning",
             )
         )
@@ -720,8 +725,48 @@ def _estimate_min_wall_thickness(
 
 
 def _has_self_intersections(mesh: trimesh.Trimesh) -> bool:
+    """Detect self-intersection by edge-piercing tests.
+
+    ``Trimesh.is_self_intersecting`` does not exist in trimesh 4 and the
+    collision manager requires python-fcl, which is not a project
+    dependency, so the previous implementation silently reported False
+    for every mesh. Two triangles intersect exactly when an edge of one
+    pierces the other (coplanar overlaps aside), so cast every unique
+    edge as a ray against the mesh and look for a hit strictly inside
+    the segment. Edges never register hits against their own adjacent
+    faces because the ray travels inside those faces' planes.
+    """
     try:
-        return bool(mesh.is_self_intersecting)
+        if len(mesh.faces) == 0:
+            return False
+
+        from trimesh.ray.ray_triangle import RayMeshIntersector
+
+        edges = mesh.edges_unique
+        vertices = mesh.vertices
+        starts = vertices[edges[:, 0]]
+        ends = vertices[edges[:, 1]]
+        directions = ends - starts
+        lengths = np.linalg.norm(directions, axis=1)
+        nonzero = lengths > 0
+        if not np.any(nonzero):
+            return False
+        starts = starts[nonzero]
+        directions = directions[nonzero]
+        lengths = lengths[nonzero]
+        directions = directions / lengths[:, None]
+
+        intersector = RayMeshIntersector(mesh)
+        locations, index_ray, _index_tri = intersector.intersects_location(
+            starts, directions, multiple_hits=True
+        )
+        if len(locations) == 0:
+            return False
+
+        distances = np.linalg.norm(locations - starts[index_ray], axis=1)
+        epsilon = 1e-6
+        interior = (distances > epsilon) & (distances < lengths[index_ray] - epsilon)
+        return bool(np.any(interior))
     except BaseException:
         return False
 
@@ -758,17 +803,44 @@ def _analyze_sections(mesh: trimesh.Trimesh) -> Tuple[int, int, Optional[float]]
     thin_tip_faces = 0
     min_hole_diameter = np.inf
 
+    section_polygons: List[List[Any]] = []
     for section in axis_aligned:
         if section is None or section.vertices.shape[0] == 0:
             continue
         try:
-            polygons = section.polygons_full
+            section_polygons.append(list(section.polygons_full))
         except BaseException:
-            polygons = []
+            section_polygons.append([])
+
+    def _void_cross_sections(polygons: List[Any]) -> int:
+        """Count void cross-sections in one slice.
+
+        Interior rings are the cross-section of a void inside the part:
+        shapely folds an inner body's outline into the outer polygon as
+        a hole. A separate polygon fully contained in another polygon of
+        the same slice is a void cross-section as well. (The previous
+        implementation instead counted dust polygons with area < 1e-2,
+        which a real cavity never produces.)
+        """
+        count = 0
         for polygon in polygons:
-            area = polygon.area
-            if area < 1e-2:
-                cavities += 1
+            count += len(list(getattr(polygon, "interiors", [])))
+            for other in polygons:
+                if other is not polygon and other.contains(polygon):
+                    count += 1
+                    break
+        return count
+
+    per_section_voids = [_void_cross_sections(polygons) for polygons in section_polygons]
+    if per_section_voids:
+        # A void that reaches the first or last slice is an open channel
+        # (e.g. a tube bore), not an enclosed cavity, so only count
+        # interior cross-sections when both end slices are solid.
+        if per_section_voids[0] == 0 and per_section_voids[-1] == 0:
+            cavities = int(sum(per_section_voids[1:-1]))
+
+    for polygons in section_polygons:
+        for polygon in polygons:
             for interior in getattr(polygon, "interiors", []):
                 coords = np.asarray(interior.coords)
                 if coords.size == 0:
@@ -855,26 +927,44 @@ def _count_high_aspect_ratio_faces(mesh: trimesh.Trimesh, threshold: float = 10.
 
 
 def _count_sharp_internal_corners(mesh: trimesh.Trimesh, angle_threshold_deg: float = 60.0) -> int:
-    if mesh.face_adjacency_angles.size == 0:
+    """Count sharp concave (internal) corners along face adjacencies.
+
+    An adjacency is an internal corner when the neighbouring face's apex
+    vertex lies on the *outer* side of this face's plane, i.e. the surface
+    folds back into the material (a notch or pocket) instead of bulging
+    outward (convex edge) or staying flat (coplanar pair). The corner is
+    sharp when the angle between the face normals reaches
+    ``angle_threshold_deg``. Coplanar triangle pairs produced by face
+    triangulation (angle 0) are therefore never counted, unlike the
+    previous implementation, which keyed on the z component of the
+    normals' cross product and counted flat diagonals of a plain box.
+    """
+    adjacency = mesh.face_adjacency
+    if adjacency.size == 0 or mesh.face_adjacency_angles.size == 0:
         return 0
 
     angles = np.degrees(mesh.face_adjacency_angles)
-    adjacency = mesh.face_adjacency
-    if adjacency.size == 0:
-        return 0
-
+    adjacency_edges = mesh.face_adjacency_edges
     normals = mesh.face_normals
-    internal_mask = []
-    for face_pair in adjacency:
-        normal_a = normals[face_pair[0]]
-        normal_b = normals[face_pair[1]]
-        cross = np.cross(normal_a, normal_b)
-        internal_mask.append(cross[2] <= 0)
+    vertices = mesh.vertices
+    faces = mesh.faces
 
-    internal_mask = np.array(internal_mask)
-    sharp = (angles < angle_threshold_deg) & internal_mask
+    count = 0
+    for index, (face_a, face_b) in enumerate(adjacency):
+        if angles[index] < angle_threshold_deg:
+            continue
+        vertex_a, vertex_b = adjacency_edges[index]
+        apex_candidates = [v for v in faces[face_b] if v != vertex_a and v != vertex_b]
+        if not apex_candidates:
+            continue
+        apex = apex_candidates[0]
+        signed_distance = float(
+            np.dot(normals[face_a], vertices[apex] - vertices[vertex_a])
+        )
+        if signed_distance > 0.0:
+            count += 1
 
-    return int(np.count_nonzero(sharp))
+    return count
 
 
 def _estimate_surface_roughness(mesh: trimesh.Trimesh) -> float:
@@ -1044,32 +1134,40 @@ def _evaluate_surface_flatness(
     axes = np.eye(3)
 
     for axis in axes:
-        alignment = np.abs(normals @ axis)
-        mask = alignment >= alignment_threshold
-        if not np.any(mask):
-            continue
+        # Pool faces per facing direction: the top and bottom faces of a
+        # box are both axis-aligned but lie on different planes, so the
+        # previous implementation, which pooled by absolute alignment,
+        # reported half the part's thickness as "flatness deviation" for
+        # a perfect box. Each (axis, sign) group is one mating surface
+        # direction whose planarity is measured against its own
+        # area-weighted reference plane.
+        signed_alignment = normals @ axis
+        for sign in (1.0, -1.0):
+            mask = signed_alignment * sign >= alignment_threshold
+            if not np.any(mask):
+                continue
 
-        candidate_centers = centers[mask]
-        if candidate_centers.size == 0:
-            continue
+            candidate_centers = centers[mask]
+            if candidate_centers.size == 0:
+                continue
 
-        axis_coordinates = candidate_centers @ axis
-        if axis_coordinates.size == 0:
-            continue
+            axis_coordinates = candidate_centers @ axis
+            if axis_coordinates.size == 0:
+                continue
 
-        if areas is not None and areas.size == normals.shape[0]:
-            weights = areas[mask]
-            weight_sum = float(np.sum(weights))
-            if weight_sum > 0.0:
-                reference = float(np.average(axis_coordinates, weights=weights))
+            if areas is not None and areas.size == normals.shape[0]:
+                weights = areas[mask]
+                weight_sum = float(np.sum(weights))
+                if weight_sum > 0.0:
+                    reference = float(np.average(axis_coordinates, weights=weights))
+                else:
+                    reference = float(np.mean(axis_coordinates))
             else:
                 reference = float(np.mean(axis_coordinates))
-        else:
-            reference = float(np.mean(axis_coordinates))
 
-        deviation = float(np.max(np.abs(axis_coordinates - reference)))
-        if deviation > max_deviation:
-            max_deviation = deviation
+            deviation = float(np.max(np.abs(axis_coordinates - reference)))
+            if deviation > max_deviation:
+                max_deviation = deviation
 
     return max_deviation
 

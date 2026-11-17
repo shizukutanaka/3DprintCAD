@@ -383,7 +383,9 @@ def slice_mesh_api(file_id):
             infill_density=sanitized_data.get('infill_density', 20),
             print_speed=sanitized_data.get('print_speed', 60),
             support_enabled=sanitized_data.get('support_enabled', True),
-            support_angle=sanitized_data.get('support_angle', 45)
+            # SliceSettings calls this support_threshold_angle; passing
+            # support_angle= raised TypeError for every API slice call.
+            support_threshold_angle=sanitized_data.get('support_angle', 45)
         )
 
         # Find file

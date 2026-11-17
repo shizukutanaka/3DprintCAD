@@ -28,7 +28,13 @@ def test_validate_mesh_success_on_box():
     assert result.metrics.min_hole_diameter_mm == 0.0
     assert result.metrics.high_aspect_ratio_faces == 0
     assert result.metrics.sharp_internal_corners == 0
-    assert result.metrics.surface_roughness_score == 0.0
+    # The roughness score is the mean absolute angle between adjacent
+    # face normals: a box has twelve 90-degree edges and six flat face
+    # diagonals, so its score is (12 * pi/2) / 18 = pi/3, not zero. The
+    # earlier 0.0 expectation cannot hold together with the rest of the
+    # suite: the recommendation engine treats a plain box as a default
+    # (non-resin) model precisely because this score is >= 0.1.
+    assert pytest.approx(result.metrics.surface_roughness_score, rel=1e-6) == np.pi / 3
     assert result.metrics.bed_contact_area_mm2 > 0.0
     assert pytest.approx(result.metrics.volume_cm3, rel=1e-6) == mesh.volume / 1000.0
     assert result.metrics.bounding_box_diagonal_mm > 0.0
@@ -40,7 +46,8 @@ def test_validate_mesh_success_on_box():
 
 def test_validate_mesh_detects_hole():
     mesh = trimesh.creation.box(extents=[5.0, 5.0, 5.0])
-    mesh.update_vertices()
+    # (trimesh 3's no-argument update_vertices() call was dropped: in
+    # trimesh 4 it requires a mask argument and was a no-op here.)
     mesh.faces = mesh.faces[:-1]
 
     result = mesh_validator.validate_mesh(mesh)
@@ -186,12 +193,31 @@ def test_validate_mesh_detects_high_aspect_ratio_faces():
 
 
 def test_validate_mesh_detects_sharp_internal_corners():
-    mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
-    notch = trimesh.creation.box(extents=[2.0, 2.0, 2.0])
-    notch.apply_translation([4.0, 0.0, 0.0])
-    combined = mesh.difference(notch)
+    # An L-shaped prism has one concave (internal) corner line where the
+    # notch meets. The fixture is built from explicit vertices/faces
+    # because the original boolean difference needs a boolean backend
+    # (manifold3d/blender), which is not a project dependency.
+    cross_section = [
+        (0.0, 0.0), (10.0, 0.0), (10.0, 4.0),
+        (4.0, 4.0), (4.0, 10.0), (0.0, 10.0),
+    ]
+    vertices = (
+        [(x, y, 0.0) for x, y in cross_section]
+        + [(x, y, 5.0) for x, y in cross_section]
+    )
+    faces = []
+    for i in range(1, 5):
+        faces.append((0, i + 1, i))            # bottom cap (-Z)
+        faces.append((6, 6 + i, 6 + i + 1))    # top cap (+Z)
+    for i in range(6):
+        j = (i + 1) % 6
+        faces.append((i, j, j + 6))
+        faces.append((i, j + 6, i + 6))
+    mesh = trimesh.Trimesh(
+        vertices=np.array(vertices), faces=np.array(faces), process=False
+    )
 
-    result = mesh_validator.validate_mesh(combined)
+    result = mesh_validator.validate_mesh(mesh)
 
     codes = {issue.code for issue in result.issues}
     assert "GEOM_SHARP_INTERNAL_CORNER" in codes
@@ -237,12 +263,16 @@ def test_validate_mesh_detects_scale_inconsistency():
 
 
 def test_validate_mesh_detects_flatness_issue():
-    base = trimesh.creation.box(extents=[20.0, 20.0, 5.0])
-    modifier = trimesh.creation.box(extents=[20.0, 20.0, 0.2])
-    modifier.apply_translation([0.0, 0.0, 2.8])
-    warped = trimesh.boolean.difference(base, modifier, engine="scad")
-    if warped is None:
-        pytest.skip("Boolean difference unavailable")
+    # A box whose top surface steps up by 0.2 mm on one side: the two
+    # top levels are not coplanar, so the flatness deviation must exceed
+    # the configured limit. The step is made by displacing vertices
+    # because the original boolean difference needs a boolean backend
+    # (the "scad" engine is not available in trimesh 4 here).
+    mesh = trimesh.creation.box(extents=[20.0, 20.0, 5.0])
+    warped = mesh.subdivide()
+    top_level = warped.vertices[:, 2].max()
+    stepped = (warped.vertices[:, 2] == top_level) & (warped.vertices[:, 0] > 0.0)
+    warped.vertices[stepped, 2] += 0.2
 
     settings = mesh_validator.MeshValidationSettings(max_flatness_deviation_mm=0.05)
     result = mesh_validator.validate_mesh(warped, settings=settings)
@@ -254,15 +284,19 @@ def test_validate_mesh_detects_flatness_issue():
 
 
 def test_validate_mesh_provides_repair_guidance():
-    mesh = trimesh.creation.box(extents=[10.0, 10.0, 10.0])
-    mesh.update_vertices()
-    mesh.faces = mesh.faces[:-2]
+    # Repair guidance accompanies warning-level findings on meshes that
+    # pass the structural error gate. The original fixture (a holed
+    # box) cannot be used for this: by design it fails the gate and
+    # returns metrics=None, as pinned by test_validate_mesh_detects_hole
+    # above, so guidance is exercised here with a thin-wall warning.
+    mesh = trimesh.creation.box(extents=[6.0, 4.0, 2.0])
 
-    result = mesh_validator.validate_mesh(mesh)
+    settings = mesh_validator.MeshValidationSettings(min_wall_thickness_mm=3.0)
+    result = mesh_validator.validate_mesh(mesh, settings=settings)
 
     codes = {issue.code for issue in result.issues}
+    assert "GEOM_WALL_THICKNESS" in codes
     assert "GEOM_REPAIR_GUIDANCE" in codes
-    assert any(code in {"GEOM_WATERTIGHT", "GEOM_VOLUME"} for code in codes)
     assert result.metrics is not None
     assert result.metrics.repair_suggestions
 

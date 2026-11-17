@@ -1465,6 +1465,15 @@ Configuration Files:
         parser.add_argument("--validate", action="store_true", default=True, help="Validate mesh")
         parser.add_argument("--repair", action="store_true", help="Repair mesh")
         parser.add_argument("--aggressive-repair", action="store_true", help="Aggressive repair")
+        # Referenced by the argument validation and the repair pipeline
+        # (and listed in the generated shell completions) but never
+        # actually registered, so every use failed with
+        # "unrecognized arguments". Register it for real.
+        parser.add_argument(
+            "--save-repaired",
+            type=Path,
+            help="Export the repaired mesh to this path (requires --repair)",
+        )
         parser.add_argument("--slice", action="store_true", help="Generate slices")
         parser.add_argument("--gcode", action="store_true", help="Generate G-code")
         parser.add_argument("--recommendations", action="store_true", default=True, help="Generate recommendations")
@@ -2575,6 +2584,15 @@ Configuration Files:
         @contextmanager
         def watchdog_timer(timeout_seconds: float, operation_name: str):
             """Context manager for watchdog timer that terminates long-running operations."""
+            if threading.current_thread() is not threading.main_thread():
+                # SIGALRM handlers can only be installed from the main
+                # thread of the main interpreter. When the CLI runs in a
+                # worker thread (concurrent/library use), proceed without
+                # the watchdog instead of failing the whole operation
+                # with "signal only works in main thread".
+                yield
+                return
+
             def timeout_handler(signum, frame):
                 raise TimeoutError(f"Operation '{operation_name}' timed out after {timeout_seconds} seconds")
 

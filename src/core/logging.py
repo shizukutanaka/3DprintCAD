@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional, Union
 import threading
 from enum import Enum
 
-from .config import get_config
+from .config import get_config, get_config_manager
 
 
 class LogLevel(Enum):
@@ -218,7 +218,10 @@ class LoggingManager:
             # Determine log directory
             if log_directory is None:
                 config = get_config()
-                log_directory = config.config_directory / "logs"
+                # Configs built outside ConfigManager may not carry a
+                # directory yet; fall back to the manager's directory.
+                base_directory = config.config_directory or get_config_manager().config_dir
+                log_directory = base_directory / "logs"
 
             log_directory.mkdir(parents=True, exist_ok=True)
 

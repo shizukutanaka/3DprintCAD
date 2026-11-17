@@ -35,8 +35,11 @@ def test_repair_mesh_with_holes():
     """Test repair of mesh with holes."""
     mesh = trimesh.creation.box(extents=[5.0, 5.0, 5.0])
 
-    # Remove some faces to create holes
-    mesh.update_faces(mesh.faces[:-2])
+    # Remove some faces to create holes. trimesh 4's update_faces takes
+    # a boolean mask of faces to keep, not a face array.
+    keep_mask = np.ones(len(mesh.faces), dtype=bool)
+    keep_mask[-2:] = False
+    mesh.update_faces(keep_mask)
 
     # Create validation result with watertight issue
     validation_result = mesh_validator.MeshValidationResult(

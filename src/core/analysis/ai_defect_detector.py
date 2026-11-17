@@ -2696,20 +2696,13 @@ def submit_ai_feedback(mesh: trimesh.Trimesh, detected_defects: List[AIDefectDet
 class InferenceOptimizer:
     """Advanced inference optimization system for AI models."""
 
-    def __init__(self, enable_caching: bool = True, cache_size: int = 1000,
-                 enable_batch_processing: bool = True, max_batch_size: int = 32):
+    def __init__(self, enable_caching: bool = True, cache_size: int = 1000):
         self.enable_caching = enable_caching
         self.cache_size = cache_size
-        self.enable_batch_processing = enable_batch_processing
-        self.max_batch_size = max_batch_size
 
         # Caching system
         self.inference_cache: Dict[str, Dict[str, Any]] = {}
         self.cache_timestamps: Dict[str, float] = {}
-
-        # Batch processing
-        self.batch_buffer: List[Tuple[str, np.ndarray]] = []
-        self.batch_results: Dict[str, Any] = {}
 
         # Performance monitoring
         self.inference_times: List[float] = []
@@ -2717,44 +2710,19 @@ class InferenceOptimizer:
         self.total_inferences = 0
         self.cache_hits = 0
 
-        # Threading for async processing
-        self._processing_thread: Optional[threading.Thread] = None
-        self._shutdown_event = threading.Event()
+        # Guards the cache structures above (used by clear_cache).
         self._batch_lock = threading.Lock()
 
         self.logger = logging.getLogger(__name__)
 
-        if self.enable_batch_processing:
-            self._start_batch_processor()
-
-    def _start_batch_processor(self):
-        """Start background batch processing thread."""
-        def batch_processor():
-            while not self._shutdown_event.is_set():
-                try:
-                    # Process batch if we have enough items. ``batch`` must
-                    # start empty on every iteration: previously it was only
-                    # assigned when the buffer was full, so the common case
-                    # (buffer below max_batch_size) raised UnboundLocalError
-                    # on ``if batch:`` and the handler logged an error every
-                    # second for the life of the thread.
-                    batch = []
-                    with self._batch_lock:
-                        if len(self.batch_buffer) >= self.max_batch_size:
-                            batch = self.batch_buffer[:self.max_batch_size]
-                            self.batch_buffer = self.batch_buffer[self.max_batch_size:]
-
-                    if batch:
-                        self._process_batch(batch)
-
-                    time.sleep(0.1)  # Small delay
-
-                except Exception as e:
-                    self.logger.error(f"Batch processor error: {e}")
-                    time.sleep(1.0)
-
-        self._processing_thread = threading.Thread(target=batch_processor, daemon=True)
-        self._processing_thread.start()
+        # Note: this class previously carried a "batch processing" path:
+        # a background thread drained ``batch_buffer`` through a
+        # ``_process_batch`` method that was never implemented, and no
+        # code anywhere ever appended to the buffer, so the thread only
+        # ever polled an empty list and a full buffer would have raised
+        # AttributeError inside the thread's error handler. The dead
+        # path (thread, buffer, results store and its constructor
+        # switches) was removed rather than completed.
 
     def predict_with_optimization(self, model, scaler, features: np.ndarray,
                                  model_type: str = "traditional") -> Tuple[float, Dict[str, Any]]:
@@ -2935,9 +2903,7 @@ class InferenceOptimizer:
             'avg_inference_time': np.mean(recent_times) if recent_times else 0.0,
             'min_inference_time': np.min(recent_times) if recent_times else 0.0,
             'max_inference_time': np.max(recent_times) if recent_times else 0.0,
-            'p95_inference_time': np.percentile(recent_times, 95) if recent_times else 0.0,
-            'batch_processing_enabled': self.enable_batch_processing,
-            'batch_buffer_size': len(self.batch_buffer)
+            'p95_inference_time': np.percentile(recent_times, 95) if recent_times else 0.0
         }
 
     def clear_cache(self):
@@ -2953,11 +2919,6 @@ class InferenceOptimizer:
 
     def shutdown(self):
         """Shutdown optimizer and cleanup resources."""
-        self._shutdown_event.set()
-
-        if self._processing_thread:
-            self._processing_thread.join(timeout=5.0)
-
         self.logger.info("Inference optimizer shutdown complete")
 
 

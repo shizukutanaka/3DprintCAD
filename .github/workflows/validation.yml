@@ -14,6 +14,8 @@ on:
       - 'models/**/*.stl'
       - 'models/**/*.3mf'
       - 'models/**/*.obj'
+      - '.github/workflows/validation.yml'
+      - 'pyproject.toml'
       - 'src/**'
       - 'tests/**'
 
@@ -130,10 +132,32 @@ jobs:
 
       - name: Test package installation
         run: |
-          pip install dist/*.whl
+          pip install --force-reinstall --no-deps dist/*.whl
+          cd "$(mktemp -d)"
           printcad --help
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          import trimesh
+
+          model = Path("model.stl")
+          trimesh.creation.box(extents=(20, 20, 20)).export(model)
+          digest = hashlib.sha256(model.read_bytes()).hexdigest()
+          Path("manifest.json").write_text(json.dumps({"files": {model.name: digest}}))
+          PY
+          printcad model.stl --hash-manifest manifest.json --output report.json --min-readiness-score 0
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("report.json").read_text())
+          assert report["success"] and report["readiness"]["checklist"], report
+          PY
 
       - name: Upload build artifacts
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@v4
         with:
           name: python-package-distributions

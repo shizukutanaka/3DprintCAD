@@ -134,8 +134,8 @@ docs = [
 [project.scripts]
 printcad = "src.cli_main:main"
 
-[tool.setuptools]
-packages = ["src", "src.core", "src.core.analysis", "src.core.recommendation", "src.adapters"]
+[tool.setuptools.packages.find]
+include = ["src", "src.adapters", "src.core", "src.core.*", "src.reporting"]
 
 [tool.setuptools.package-data]
 "*" = ["*.txt", "*.md"]

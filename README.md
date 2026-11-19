@@ -55,14 +55,26 @@ pip install -e .
 
 ### Basic Usage
 
+The default CLI policy requires a SHA-256 manifest. For one file, save
+`{"files":{"model.stl":"<SHA-256 hex digest>"}}` as `manifest.json` next
+to the model.
+
 **CLI - Validate a single model:**
 ```bash
-python -m src.cli_main model.stl --output report.json --summary
+printcad model.stl --hash-manifest manifest.json --output report.json --summary
+```
+
+If you have [uv](https://docs.astral.sh/uv/getting-started/installation/),
+run the same local preflight from GitHub without a manual clone or virtual environment:
+
+```bash
+uvx --python 3.11 --from git+https://github.com/shizukutanaka/3DprintCAD.git \
+  printcad model.stl --hash-manifest manifest.json --output report.json --summary
 ```
 
 **CLI - Batch processing:**
 ```bash
-python -m src.cli_main --pattern "models/*.stl" --auto-summary
+printcad --pattern "models/*.stl" --hash-manifest manifest.json --auto-summary
 ```
 
 > **Note:** after `pip install -e .`, the CLI is also available as
@@ -185,9 +197,8 @@ python -m src.cli_main --help
 > - One fatigue-recommendation description string in
 >   `src/core/simulation_based_design.py` is garbled (`.0f`); the
 >   original text is unrecoverable.
-> - The `[tool.setuptools]` package list in `pyproject.toml` is
->   incomplete (for example, `src.web` is not listed). Editable
->   installs (`pip install -e .`) are unaffected.
+> - The wheel supports CLI preflight. Use the source checkout for the
+>   Web app; the wheel does not include `run_server.py` or `src.web`.
 
 ---
 
